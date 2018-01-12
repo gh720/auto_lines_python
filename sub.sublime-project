@@ -1,0 +1,11 @@
+{
+	"folders":
+	[
+		{
+			"path": "E:\\work\\devel\\python3\\projects",
+			"file_exclude_patterns": [
+				"al.py"
+			]
+		}
+	], 
+}
