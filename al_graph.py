@@ -25,9 +25,15 @@ def main():
     #     nx.set_node_attributes(G,attrs)
     #     return G   
 
+    def draw():
+        board._bg.draw_paths(main_ax)
+
+    def draw2():
+        board._bg.draw(main_ax)
+
     def start():
         # G=make_graph()
-        board._bg.draw(main_ax)
+        draw()
 
     
     def next_move():
@@ -59,14 +65,15 @@ def main():
         # import pdb;pdb.set_trace() # ddd
         picked= next_move()
         # G=make_graph()
-        board._bg.draw(main_ax)
+        draw()
 
-    ax = plt.subplot(111)
-    main_ax= plt.gca()
+    plt.figure(1,figsize=(6,6))
+    main_ax = plt.subplot(111)
+    # main_ax= plt.gca()
 
     plt.connect('button_press_event', on_click)
 
-    axcut = plt.axes([0.9, 0.0, 0.1, 0.075])
+    axcut = plt.axes([0.9, 0.5, 0.1, 0.075])
     bcut = Button(axcut, 'YES', color='red', hovercolor='green')
     bcut.on_clicked(_exit)
     

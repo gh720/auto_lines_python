@@ -4,7 +4,10 @@ import matplotlib.pyplot as plt
 import random,math,copy
 from random import randrange,randint
 from matplotlib.widgets import Button
-from collections import deque
+from collections import deque,defaultdict
+from attrdict import AttrDict
+
+from pprint import pprint
 
 # def _init():
 #     random.seed(0)
@@ -52,45 +55,17 @@ class Board_graph:
     G = None
     metrics=dict()
 
-    def make_graph(board):
-        a = board.get_array()
-        size = board.get_size()
-        G = nx.grid_graph([size,size]) # TODO: decouple
-        attrs={}
-        for i in range(size):
-            for j in range(size):
-                data={ 'pos': (i,j), 'occupied': a[i][j] } 
-                attrs[(i,j)]=data
-        nx.set_node_attributes(G,attrs)
-        return G   
-
-    def draw(self,axes):
-        G,FG,OG = self.G,self.FG,self.OG # FIND: go about inappropriate calls
-        plt.sca(axes)
-        plt.cla()
-
-        # OG = G.subgraph([ x for x,data in G.nodes.items() if data['occupied']!=None] ).copy()
-        # nx.set_node_attributes(OG,gna(OG,'occupied'),'colors')
-        # FG=G.copy(); FG.remove_nodes_from(OG)
-        # sna(FG,nx.load_centrality(FG),'lc_metric')
-        # ap=nx.articulation_points(FG)
-        # APG=FG.subgraph(ap).copy()
-
-        text={ (x,y):(x,y+.3) for x,y in gna(G,'pos') };
-
-        plt.figure(1,figsize=(8,8))
-        nx.draw_networkx(FG,pos=gna(G,'pos')
-            , with_labels=False, node_shape='s',node_size=100, cmap=plt.get_cmap('plasma')
-            , node_color=[gna(FG,'lc_metric').get(x,0)for x in list(FG)] )
-        nx.draw_networkx(OG,pos=gna(OG,'pos'), with_labels=False, node_shape='o',node_size=500
-            , node_color=[ mpl.colors.cnames[y] for x,y in gna(OG,'color').items()] )
-        # nx.draw_networkx_edges(TG, gna(TG,'pos'), sp_edges, width=3.0, edge_color='r', arrow_style='>')
-        # nx.draw_networkx_nodes(APG, pos=gna(FG,'pos'), node_shape='d', node_color='r', node_size=300)
-        nx.draw_networkx_labels(G, pos=text, labels={ (x,y):str((x,y)) for x,y in gna(G,'pos') })
-        plt.show()
-
-
-
+    # def make_graph(board):
+    #     a = board.get_array()
+    #     size = board.get_size()
+    #     G = nx.grid_graph([size,size]) # TODO: decouple
+    #     attrs={}
+    #     for i in range(size):
+    #         for j in range(size):
+    #             data={ 'pos': (i,j), 'occupied': a[i][j] } 
+    #             attrs[(i,j)]=data
+    #     nx.set_node_attributes(G,attrs)
+    #     return G   
 
     def update_graph(self,board): # TODO: decouple
         a = board.get_array()
@@ -123,33 +98,384 @@ class Board_graph:
         # APG=FG.subgraph(ap).copy()
         return self.metrics
 
+    def draw(self,axes,chained=False):
+        G,FG,OG = self.G,self.FG,self.OG # FIND: go about inappropriate calls
+        if not chained:
+            plt.sca(axes)
+            plt.cla()
+            # plt.figure(1,figsize=(8,8))
+
+
+        # OG = G.subgraph([ x for x,data in G.nodes.items() if data['occupied']!=None] ).copy()
+        # nx.set_node_attributes(OG,gna(OG,'occupied'),'colors')
+        # FG=G.copy(); FG.remove_nodes_from(OG)
+        # sna(FG,nx.load_centrality(FG),'lc_metric')
+        # ap=nx.articulation_points(FG)
+        # APG=FG.subgraph(ap).copy()
+
+        text={ (x,y):(x,y+.3) for x,y in gna(G,'pos') };
+
+        
+        nx.draw_networkx(FG,pos=gna(G,'pos')
+            , with_labels=False, node_shape='s',node_size=100, cmap=plt.get_cmap('plasma')
+            , node_color=[gna(FG,'lc_metric').get(x,0)for x in list(FG)] )
+        nx.draw_networkx(OG,pos=gna(OG,'pos'), with_labels=False, node_shape='o',node_size=500
+            , node_color=[ mpl.colors.cnames[y] for x,y in gna(OG,'color').items()] )
+        # nx.draw_networkx_edges(TG, gna(TG,'pos'), sp_edges, width=3.0, edge_color='r', arrow_style='>')
+        # nx.draw_networkx_nodes(APG, pos=gna(FG,'pos'), node_shape='d', node_color='r', node_size=300)
+        nx.draw_networkx_labels(G, pos=text, labels={ (x,y):str((x,y)) for x,y in gna(G,'pos') })
+        if not chained:
+            plt.show()
+
+    
+
+    def draw_paths(self,axes,chained=False):
+        start = (0,0)
+        end = (5,8)
+        parents = self.all_paths(start,end)
+        edges = set()
+        for child, child_parents  in parents.items():
+            for parent in child_parents:
+                edges.add((parent,child))
+
+        edges_traceback=[ (x,y) for x,y in self.get_paths_edges(parents,end) if x!=None ]
+        TG =self.G.subgraph(list(parents.keys())+[end])
+        g_path = nx.DiGraph()
+        g_path.add_nodes_from(TG)
+
+        g_path_traceback = g_path.copy()
+        
+        g_path.add_edges_from(edges)
+        g_path_traceback.add_edges_from(edges_traceback)
+
+        if not chained:
+            plt.sca(axes)
+            plt.cla()
+            
+
+        self.draw(axes,chained=True)
+        nx.draw_networkx_edges(g_path, gna(self.G,'pos'), width=2, edge_color='cyan')
+        nx.draw_networkx_edges(g_path_traceback, gna(self.G,'pos'), width=1, edge_color='red')
+        if not chained:
+            plt.show()
+
+    def assess_paths(self,start,end):
+        FG=self.FG
+        self.cycles=nx.cycle_basis(FG)
+        self.art = nx.articulation_points(FG)
+        short = nx.shortest_path(FG,start,end)
+        cutsets = self.get_path_cutsets(short,self.cycles)
+        prob = self.cutoff_probability(cutsets)
+        
+    
+    # compute triangle area (x 2), > 0 - right turn, < 0 - left turn
+    @staticmethod
+    def triangle_area2(a,b,c):
+        a.x*b.y -a.y*b.x+a.y*c.x-a.x*c.y+b.x*c.y-c.x*b.y
+
+    @staticmethod
+    def get_cycle_bounds(cycle):
+        i_min=0
+        minx,miny=cycle[0]
+        maxx,maxy=cycle[0]
+        miny_for_minx=None
+        for i in range(len(cycle)):
+            x,y = cycle[i]
+            if x< minx:
+                minx=x
+                miny_for_minx=y
+                i_min=i
+            elif x==minx:
+                if miny_for_minx==None or y<miny_for_minx:
+                    miny_for_minx=y
+                    i_min=i
+            miny=min(miny,y)
+            maxx=max(maxx,x)
+            maxy=max(maxy,y)
+        return i_min,minx,miny,maxx,maxy
+
+    # -1 - anti, 1 - clock-wise, None - not a cycle 
+    @staticmethod
+    def get_cycle_direction(cycle):
+        assert len(cycle)>2
+        e=AttrDict()
+        v0=AttrDict()
+        v=AttrDict()
+        
+        i_min,minx,miny,maxx,maxy=__class__.get_cycle_bounds(cycle)
+        i_min_next=(i_min+1)%len(cycle)
+
+        x,y = cycle[i_min]
+        e.x0=x
+        e.y0=y
+        e.x0,e.y0=cycle[i_min]
+        e.x1,e.y1=cycle[i_min_next]
+
+        # we've got left bottom corner, the only directions is up (clockwise) and right (anti-clockwise)
+
+        v0.dx,v0.dy = e.x1-e.x0, e.y1-e.y0
+
+        if v0.dy==1:
+            return 1
+        if v0.dx==1:
+            return -1
+        assert False
+        return None
+
+    @staticmethod
+    def change_cycles_direction(cycles, dir):
+        new_cycles=[]
+        for cycle in cycles:
+            old_dir = __class__.get_cycle_direction(cycle)
+            new_cycle=copy.copy(cycle)
+            if old_dir!=dir:
+                new_cycle.reverse()
+            new_cycles.append(new_cycle)
+        return new_cycles
+
+
+    @staticmethod
+    def get_cycle_sets(cycles):
+        sets=AttrDict()
+        sets.node_map=defaultdict(dict)
+        sets.cycles=[]
+
+        for ci, cycle in  enumerate(cycles):
+            d = dict()
+            for ni,node in enumerate(cycle):
+                sets.node_map[node][ci]=ni
+                d[node]=ni
+            sets.cycles.append([cycle,d])
+        return sets
+
+    @staticmethod
+    def segment_key(item):
+        pass
+
+
+    @staticmethod
+    def get_path_segments(path,cycle_sets):
+        segments=dict()
+        for cy_i, item in enumerate(cycle_sets.cycles):
+            cycle,cycle_dict=item
+            segment= [ [i,node] for i,node in enumerate(path) if node in item[1] ]
+            if segment:
+                segments[cy_i]=.append([segment, cy_i])
+
+        return sorted(segments, key=lambda x: x[0][0])
+
+    @staticmethod
+    def next_i(_list,list_i):
+        if not _list:
+            return None
+        return (list_i+1)% len(_list)
+
+    @staticmethod
+    def next_n(_list,list_i,cycle=True):
+        if not _list:
+            return None
+        i= (list_i+1)% len(_list)
+        if i<=list_i and not cycle:
+            return None,None
+        return _list[i],i
+
+    @staticmethod
+    def prev_i(_list,list_i):
+        if not _list:
+            return None
+        return (prev_i-1+len(_list))% len(_list)
+
+    @staticmethod
+    def prev_n(_list,list_i,cycle=True):
+        if not _list:
+            return None
+        i= (list_i-1+len(_list))% len(_list)
+        if i >= list_i and not cycle:
+            return None,None
+        return _list[i],i
+
+    @staticmethod
+    def m1(path,segments):
+        alt_path_segments=[]
+        for seg_i, item in enumerate(segments):
+            segment,cycle,cycle_dict=item
+            path_i,node= segment[0]
+            next_path_i=next_i(path,path_i)
+            a,b = [ cycle_dict[path[i]] for i in [path_i,next_path_i]]
+            if b==next_i(cycle, a):
+                pass
+            else:
+                alt_segment=[]
+                while True:
+                    alt_segment.append(a)
+                    a=next_i(cycle,a)
+                    if a==b:
+                        break
+                    assert len(alt_path)<100
+
+    @staticmethod
+    def get_node_cycles(node,cycle_sets):
+
+
+    @staticmethod
+    def check_direction(cycle_sets,cy_i,node,next_node):
+        nm=cycle_sets.node_map
+        cn_i=nm[node][cy_i] if node in nm else None
+        cn_i_next=nm[next_node][cy_i] if next_node in nm else None
+        if next_i(cycle_sets.cycles[cy_i],cn_i)==cn_i_next:
+            return 1
+        if prev_i(cycle_sets.cycles[cy_i],cn_i)==cn_i_next:
+            return -1
+        return None
+
+
+    @staticmethod
+    def get_segment(cycle_sets, cy_i, start, dir):
+
+
+    def get_cutsets(self,path,cycles,level=0):
+        if level>2:
+            return []
+        FG=self.FG
+        scheduled=dict()
+        cycle_sets=__class__.get_cycle_sets(cycles)
+        get_path_segments(path,cycle_sets)
+        nm = cycle_sets.node_map
+        for path_i,node in enumerate(path):
+            cy_indexes = nm[node]
+            next_node, next_i = next_n(path,path_i)
+            if next_node==None:
+                break
+            for cy_i in cy_indexes:
+                if cy_i in scheduled:
+                    continue
+                scheduled[cy_i]=1 # need to skip this sometimes
+                dir = check_direction(cycle_sets,cy_i,node,next_node)
+                end_node = 
+                segment = __class__.get_segment(cycle_sets, cy_i, start=node, dir=-dir)
+                get_cutsets_rv(self,segment)
+
+
+
+                cycle,node_dict= cycle_sets.cycles[cy_i]
+
+                check_direction(node,next_node,cycle)
+
+
+
+
+
+    def get_cycle_patches(self,path,cycles):
+        return None
+
+    def get_path_cutsets(self, path, cycles, level=0):
+        if level >2:
+            return [] 
+        FG=self.FG
+        patches=self.get_cycle_patches(path,cycles)
+        cutsets=dict()
+        for i in range(len(patches)):
+            patch = patches[i]
+            next_patch=patches[i+1] if i < len(patches)-1 else None
+            if patch.conn==1:
+                for node in patch.nodes:
+                    self.add_cutsets(cutsets,[node])
+                continue
+            if patch.conn==2:
+                if next_patch!=None:
+                    shared=self.intersect(cycles[patch.cycle],cycles[next_patch.cycle])
+                    pfw = self.get_cycle_patch(cycles[patch.cycle],start=patch.nodes[0],end=shared[0])
+                    pback =self.get_cycle_patch(cycles[patch.cycle],start=shared[-1],end=patch.nodes[0])
+                    trimmed_cycles=[cycles[j] for j in range(len(cycles)) if j!=i]
+                    fw_cutsets=self.get_path_cutsets(pfw,trimmed_cycles, level+1)
+                    back_cutsets=self.get_path_cutsets(pback,trimmed_cycles, level+1)
+                    for i in fw_cutsets:
+                        for j in back_cutsets:
+                            self.add_cutsets(cutsets, i+j)
+
+
+    def cutoff_probability(self, cutsets):
+        prob=0
+        c1 = [ x for x in cutsets if len(x) ==1]
+        c2 = [ x for x in cutsets if len(x) ==2]
+        c3 = [ x for x in cutsets if len(x) ==3]
+        node_count=len(self.FG.nodes)
+        prob = c1/node_count
+        if node_count>1:
+            prob += c2 / (node_count*(node_count-1))
+
+
+        if node_count>2:
+            prob += c3 / (node_count*(node_count-1)*(node_count-2))
+
+
+
+
+
+
+
+
+
+
+
     def path(self,x,y,x2,y2):
         assert self.G!=None
         path = nx.shortest_path(self.G, (x,y), (x2,y2))
         return path
 
 
-    def all_paths(self, start, end):
-        G=self.G
-        parents=[]
-        queue = deque(start)
+    def get_paths_edges(self, parents, node ):
+        queue = deque()
+        seen = set()
+        queue.append([None,node])
         while queue:
-            node=queue.popleft()
+            child, parent = queue.popleft()
+            if (child,parent) in seen:
+                continue
+            seen.add((child,parent))
+            yield child,parent
+            queue.extend([ (parent,pp) for pp in parents[parent]])
+
+
+    def all_paths(self, start, end):
+        FG=self.FG
+        for i in  range(9):
+            if start in FG.nodes: 
+                break
+            x,y=start
+            start = (x,y+1)    
+        
+        parents={start:[]}
+            
+        queue = deque([(None, start)])
+        enqueued,new,seen=set((start,)),set(),set()
+        nodes = dict(start=[])
+
+        print("*** next round")
+        while queue:
+            parent, node=queue.popleft()
             if node==end:
                 continue
-            nei=set(G[node])
-            new = nei-enqueued
-            seen = nei & enqueued
+
+            nei=set(FG[node])
+            new = nei - enqueued
+            seen = ( nei & enqueued ) 
             enqueued |= new
-            if not new: # dead end
-                continue
+            # if not new: # dead end
+            #     continue
 
 
             for child in new:
-                queue.append(child)
+                queue.append((node,child))
+                assert child not in parents
                 parents[child]=[node]
-            for child in seen:
-                parents[child].append(node)
+            for s in seen:
+                if not s in parents[node]: # if not traversed in opposite direction
+                    parents[s].append(node)
+            # pprint(queue)
+        print ("----- parents:")
+        pprint(parents)
+        return parents
 
 
 
