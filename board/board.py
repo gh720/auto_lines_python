@@ -1,7 +1,7 @@
 import copy 
 from random import randrange,randint
 import collections
-from board_graph import Board_graph
+from .board_graph import Board_graph
 from attrdict import AttrDict
 
 

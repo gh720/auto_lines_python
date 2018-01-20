@@ -8,8 +8,7 @@ from collections import deque,defaultdict
 from attrdict import AttrDict
 
 from pprint import pprint
-import connect_assess 
-from connect_assess import connect_assessor_c
+from .connect_assess import connect_assessor_c
 
 # def _init():
 #     random.seed(0)

@@ -5,7 +5,7 @@ import random,math,copy
 from random import randrange,randint
 from matplotlib.widgets import Button
 
-from board import Board
+from board.board import Board
 
 def main():
     # import pdb; pdb.set_trace()
