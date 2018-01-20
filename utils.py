@@ -1,4 +1,4 @@
-import subprocess
+# import subprocess
 
 LEFT=-1
 RIGHT=1
@@ -6,7 +6,7 @@ DIR_DICT = { (0,1): 0, (1,0):1, (0,-1):2, (-1,0):3}
 DIRS = [(0,1),(1,0),(0,-1),(-1,0)]
 
 
-def direction(node_a,node_b)
+def direction(node_a,node_b):
     return DIR_DICT[(node_b[0]-node_a[0],node_b[1]-node_a[1])]
     
 

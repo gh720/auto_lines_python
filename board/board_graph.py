@@ -8,6 +8,8 @@ from collections import deque,defaultdict
 from attrdict import AttrDict
 
 from pprint import pprint
+import connect_assess 
+from connect_assess import connect_assessor_c
 
 # def _init():
 #     random.seed(0)
@@ -260,7 +262,7 @@ class Board_graph:
             cycle,cycle_dict=item
             segment= [ [i,node] for i,node in enumerate(path) if node in item[1] ]
             if segment:
-                segments[cy_i]=.append([segment, cy_i])
+                segments[cy_i].append([segment, cy_i])
 
         return sorted(segments, key=lambda x: x[0][0])
 
@@ -315,6 +317,7 @@ class Board_graph:
 
     @staticmethod
     def get_node_cycles(node,cycle_sets):
+        pass
 
 
     @staticmethod
@@ -331,6 +334,63 @@ class Board_graph:
 
     @staticmethod
     def get_segment(cycle_sets, cy_i, start, dir):
+        pass
+
+    @staticmethod
+    def get_dag(G,start):
+        parents=dict()
+        order=dict()
+        queue=deque([(None,start)])
+        edges=[]
+        counter=0
+        while queue:
+            parent,node =  queue.popleft()
+            if node not in order:
+                order[node] = counter
+                counter+=1
+            if node not in parents:
+                for n in G[node]:
+                    if n!=parent:
+                        queue.append((node,n))
+            if parent!=None:
+                if order[node] < order[parent]:
+                    parents.setdefault(parent,[]).append(node)
+                    edges.append((node,parent))
+                else:
+                    parents.setdefault(node,[]).append(parent)
+                    edges.append((parent,node))
+            
+            
+        return edges
+
+    @staticmethod
+    def minleaf(G,start):
+        dag= __class__.get_dag(G,start)
+
+        GG = nx.Graph()
+        GG.add_nodes_from(G)
+        GG.add_edges_from(dag)
+        B=nx.DiGraph()
+        tgt_dict =dict()
+        mm_tgt_set = set()
+        tmin = []
+        for edge in dag:
+            src= edge[0]
+            tgt=(edge[1][0]+100,edge[1][1]+100)
+            tgt_dict.setdefault(tgt, []).append(src)
+            B.add_edge(src,tgt)
+        mm = nx.maximal_matching(B)
+        for edge in mm:
+            mm_tgt_set.add(edge[1])
+        for node in tgt_dict:
+            if node not in mm_tgt_set:
+                mm.add((tgt_dict[node][0], node))
+        for edge in mm:
+            tgt=(edge[1][0]-100,edge[1][1]-100)
+            assert tgt[0]>=0 and tgt[1]>=0
+            tmin.append((edge[0],tgt))
+
+        return tmin,dag
 
 
     def get_cutsets(self,path,cycles,level=0):
@@ -351,7 +411,7 @@ class Board_graph:
                     continue
                 scheduled[cy_i]=1 # need to skip this sometimes
                 dir = check_direction(cycle_sets,cy_i,node,next_node)
-                end_node = 
+                end_node = None
                 segment = __class__.get_segment(cycle_sets, cy_i, start=node, dir=-dir)
                 get_cutsets_rv(self,segment)
 
@@ -476,6 +536,15 @@ class Board_graph:
         print ("----- parents:")
         pprint(parents)
         return parents
+
+
+    @staticmethod
+    def assess_path(G, start, end):
+        ca = connect_assessor_c(G)
+        path = nx.shortest_path(G, start,end)
+        dag= ca.cycles_along_path(path)
+        return dag
+
 
 
 
