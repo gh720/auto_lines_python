@@ -93,12 +93,13 @@ class connect_assessor_c:
             pdir = DIRS[next_i_in_loop(DIRS,dir)]
             return (pos[0]+pdir[0]*shift,pos[1]+pdir[1]*shift)
 
+    def ge(self,edges):
+        return [(edge[0], edge[1]) for edge in edges]
+
     def _sp(self):
         import matplotlib.pyplot as plt
 
-        def ge(edges):
-            return [ (edge[0], edge[1]) for edge in edges ]
-        
+
 
         # import pdb; pdb.set_trace() #DDD 
 
@@ -136,9 +137,9 @@ class connect_assessor_c:
 
             nx.draw_networkx_edges(DFG,pos=gna(G,'pos'), edgelist=self.dagp_edges.keys(), edge_color='b', width=3)
             # nx.draw_networkx_edges(DFG,pos=gna(G,'pos'), edgelist=dag_left, edge_color='b', width=3)
-            TG=DFG.edge_subgraph(ge(dag_trunk)).copy()
-            LG=DFG.edge_subgraph(ge(dag_left)).copy()
-            RG=DFG.edge_subgraph(ge(dag_right)).copy()
+            TG=DFG.edge_subgraph(self.ge(dag_trunk)).copy()
+            LG=DFG.edge_subgraph(self.ge(dag_left)).copy()
+            RG=DFG.edge_subgraph(self.ge(dag_right)).copy()
 
             # nx.draw_networkx_edges(DFG,pos=gna(G,'pos'), edgelist=me, edge_color='g', width=2)
             trunk_labels={ (edge[0],edge[1]): self.order.get(edge,'') for edge in dag_trunk }
@@ -156,16 +157,47 @@ class connect_assessor_c:
         plt.show()
 
 
+    def cycle_check(self,start_node):
+        node_state=dict() # encoutered=1,completed=2
+        def dfs(node):
+            state=node_state.get(node)
+            if state==1:
+                assert False # cycle detected
+            elif state==None:
+                node_state[node]=1
+            else:
+                return
+            parents=self.dagp_rev.get(node)
+            if parents:
+                for parent in parents:
+                    dfs(parent)
+            node_state[node]=2
+        return
+
+
+    def update_reachability(self,node):
+        parents = self.dagp_rev.get(node)
+        if parents:
+            reachable=dict()
+            for parent in parents:
+                prs = self.reachable.get(parent,dict())
+                for pr in prs:
+                    reachable[pr]=1
+            self.reachable[node]=reachable
+
     def cycles_along_path(self, start_path):
         arc_junctions=self.arc_junctions=dict()
         start =start_path[0]
         path_dict = self.path_dict = self.get_nodes_dict(start_path)
         # queue = deque()
         dagp=self.dagp = defaultdict(list)
+        dagp_rev=self.dagp_rev=defaultdict(list)
         dagp_edges=self.dagp_edges=dict()
         trunk_join=self.trunk_join=dict()
         order = self.order=dict()
+        reachable = self.reachable=defaultdict(dict)
         counter=0
+
 
         def add_to_dag(edge,turn):
             nonlocal counter, self
@@ -174,8 +206,12 @@ class connect_assessor_c:
                 assert False
             # if parent in dagp:
             #     assert False
+            if node==(3,6):
+                debug=1
             dagp.setdefault(parent,[]).append((node,dir,counter))
-            dagp_edges[edge]=turn
+            dagp_rev.setdefault(node,[]).append((parent,dir,counter))
+            dagp_edges[edge] = turn
+            self.update_reachability(node)
             order[edge]=counter
             counter+=1
 
@@ -192,21 +228,28 @@ class connect_assessor_c:
             trunk_join[node]=node_i
 
         current_path=[]
+        _counter=9
+        all_arcs=self.all_arcs=[]
+        iteration=0
         while True:
             if not next_path:
                 break
             current_path=copy.deepcopy(next_path)
             next_path=[]
+            iteration+=1
             for i, path in enumerate(current_path):
                 arc,_trunk_leave_index,arc_turn = path
                 if arc_turn==None:
                     arc_turn=0 # main trunk
 
                 for edge_i,edge in enumerate(arc):
-                    if counter>=54:
+                    if counter>=_counter:
                         debug=1
                     parent,node,dir_prev= edge
-                    trunk_leave_index = _trunk_leave_index or edge_i
+                    trunk_leave_index = _trunk_leave_index
+                    if trunk_leave_index==None:
+                        assert iteration==1
+                        trunk_leave_index=edge_i
 
                     edge_turn = dagp_edges.get(edge,0)
                     assert edge_turn==arc_turn
@@ -267,6 +310,8 @@ class connect_assessor_c:
                             # nei_edge = (node,nei,dir)
                             edge_turn = dagp_edges.get(nei_edge,None) # if nei_edge in dagp_edges else None
                             back_edge_turn = dagp_edges.get((nei,node,back_dir),None) # if (nei,node,back_dir) in dagp_edges else None
+                            if counter>=_counter:
+                                debug=1
                             junction =None
                             junction_ordered=None
                             if edge_turn!=None: # only happens if an edge scheduled for both left and right traversal
@@ -295,22 +340,28 @@ class connect_assessor_c:
                             else:
                                 next_arc,first_junction, last_junction = self.arc_walk(nei_edge, None, None,  turn, trunk_leave_index)
                             if next_arc:
+                                arc_info=[]
                                 first_edge,last_edge=next_arc[0],next_arc[-1]
                                 trunk_back_index=trunk_join[last_edge[1]]
                                 for i,edge in enumerate(next_arc):
+                                    _cnt=counter
+                                    arc_info.append((*edge, _cnt))
                                     add_to_dag(edge, turn)
                                     trunk_join[edge[1]]=trunk_back_index
                                 if first_junction:
                                     arc_junctions[first_edge]=first_junction
                                     arc_junctions[last_edge]=last_junction
 
+                                self.cycle_check(arc[0][0])
                                 next_path+=[[next_arc, trunk_leave_index, turn]]
+                                all_arcs.append([arc_info,trunk_leave_index])
                     _scope_251()
+        return dagp_edges
 
     def dfs_walk(self, start_edge, turn):
         queue=deque([start_edge])
         # queue.append(start_edge)
-        seen_nodes=dict()
+        seen_nodes={start_edge[0]:1}
         arc=[]
         arc_map=dict()
         junction_map=dict()
@@ -318,11 +369,45 @@ class connect_assessor_c:
         following_earlier_turns=True
         # new_edges=False
         joint_reached = False
-        last_edge=None
+        first_edge=None
+
+        def check_turn_consistent(edge):
+            nonlocal following_earlier_turns
+            edge_back = (edge[1], edge[0], (2 + edge[2]) % len(DIRS))
+            turn_fw = self.dagp_edges.get(edge)
+            turn_bw = self.dagp_edges.get(edge_back)
+            assert turn_fw == None or turn_bw == None
+            turn_consistent = False
+            if turn_fw != None or turn_bw != None:
+                if not following_earlier_turns:
+                    return False
+                if turn_fw and turn_fw == -turn:
+                    turn_consistent = True
+                elif turn_bw and turn_bw == turn:
+                    turn_consistent = True
+                if not turn_consistent:
+                    following_earlier_turns = False
+                    return False
+                return True
+            else:
+                following_earlier_turns = False
+                return True
+
         while queue:
-            edge= queue.pop()
+            edge = queue.pop()
+            ok_to_follow = check_turn_consistent(edge)
+            if not ok_to_follow:
+                continue
+            if not following_earlier_turns:
+                first_edge = first_edge or edge
+
             parent,node,dir=edge
             dir_back=(dir+2)%len(DIRS)
+
+            if node in seen_nodes:
+                continue
+            seen_nodes[node] = 1
+
             if not following_earlier_turns and node in self.dagp:
                 joint_reached=True
                 break
@@ -330,38 +415,34 @@ class connect_assessor_c:
                 joint_reached=True
                 break
 
-            if node in seen_nodes:
-                continue
+
             neis=self.neighbors(node,dir_back)
             neis_it = neis if turn ==RIGHT else neis.reverse()
             for nei,dir in neis:
                 nei_edge =(node,nei,dir)
-                nei_edge_back=(nei,node,(2+dir)%len(DIRS))
+                # nei_edge_back=(nei,node,(2+dir)%len(DIRS))
                 # the arc can start with already traversed edges: backwards if with the same turn
                 #   or forwards if with opposite turn
-                turn_fw =  self.dagp_edges.get(nei_edge)
-                turn_bw =  self.dagp_edges.get(nei_edge_back)
-                assert turn_fw==None or turn_bw==None
-                turn_consistent = False
-                if turn_fw!=None or turn_bw!=None:
-                    if not following_earlier_turns:
-                        break
-                    if turn_fw and turn_fw==-turn:
-                        turn_consistent=True
-                    elif turn_bw and turn_bw==turn:
-                        turn_consistent=True
-                    if not turn_consistent:
-                        following_earlier_turns=False
-                        break
-                else:
-                    following_earlier_turns=False
+                # turn_fw =  self.dagp_edges.get(nei_edge)
+                # turn_bw =  self.dagp_edges.get(nei_edge_back)
+                # assert turn_fw==None or turn_bw==None
+                # turn_consistent = False
+                # if turn_fw!=None or turn_bw!=None:
+                #     if not following_earlier_turns:
+                #         break
+                #     if turn_fw and turn_fw==-turn:
+                #         turn_consistent=True
+                #     elif turn_bw and turn_bw==turn:
+                #         turn_consistent=True
+                #     if not turn_consistent:
+                #         following_earlier_turns=False
+                #         break
+                # else:
+                #     following_earlier_turns=False
 
                 queue.append(nei_edge)
                 if not following_earlier_turns:
                     arc_map[nei_edge] = edge
-                else:
-                    seen_edge=
-                    break # queue only one neighbor if already traversed
 
         while queue:
             q = queue.pop()
@@ -374,7 +455,7 @@ class connect_assessor_c:
                     last_junction = last_junction or junction
                     first_junction = junction
                 arc.append(edge)
-                edge = arc_map[edge]
+                edge = arc_map.get(edge)
         return arc, first_junction, last_junction
 
     def arc_walk(self, start_edge, junc_edge, junction, turn, trunk_leave_index):
@@ -386,10 +467,14 @@ class connect_assessor_c:
         arc, first_junction, last_junction = self.dfs_walk(edge,turn)
         if not arc:
             return None,None,None
+        if arc[0][-1]==arc[-1][0]:
+            return None,None,None
 
-        last_edge= arc[0]
-        if self.trunk_join[last_edge[1]] <= trunk_leave_index:  # return to main path behind our entry
-            return None, None, None
+        # if self.trunk_join[last_edge[1]] <= trunk_leave_index:  # return to main path behind our entry
+        #     return None, None, None
+        reachable = self.reachable.get(arc[-1][0])
+        if reachable and reachable.get(arc[0][1]):
+            return None,None,None
         return list(reversed(arc)), first_junction, last_junction
 
     def arc_walk_old(self, start_edge, junc_edge, junction, turn, trunk_leave_index):
