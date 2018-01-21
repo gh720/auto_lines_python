@@ -73,7 +73,7 @@ class connect_assessor_c:
         d=  { node:i for i,node in enumerate(nodes) }
         return d
 
-    def get_neighbors(self, node, dir):
+    def neighbors(self, node, dir):
         neis = self.G[node]
         neis_sorted = [[None,None] for x in range(4)]
         for i,nei in enumerate(neis):
@@ -159,7 +159,7 @@ class connect_assessor_c:
     def cycles_along_path(self, start_path):
         arc_junctions=self.arc_junctions=dict()
         start =start_path[0]
-        path_dict = self.get_nodes_dict(start_path)
+        path_dict = self.path_dict = self.get_nodes_dict(start_path)
         # queue = deque()
         dagp=self.dagp = defaultdict(list)
         dagp_edges=self.dagp_edges=dict()
@@ -218,7 +218,7 @@ class connect_assessor_c:
                     else:
                         break
                     assert dir_next!=None # end node reached - should have exited loop earlier
-                    neis = self.get_neighbors(node,dir_next) 
+                    neis = self.neighbors(node, dir_next)
 
                     dir_back_suggested=None
                     if dir_prev_back==None: # initial node - taking an arbitrary edge to separate left and right arcs
@@ -307,8 +307,92 @@ class connect_assessor_c:
                                 next_path+=[[next_arc, trunk_leave_index, turn]]
                     _scope_251()
 
+    def dfs_walk(self, start_edge, turn):
+        queue=deque([start_edge])
+        # queue.append(start_edge)
+        seen_nodes=dict()
+        arc=[]
+        arc_map=dict()
+        junction_map=dict()
+        first_junction=last_junction=None
+        following_earlier_turns=True
+        # new_edges=False
+        joint_reached = False
+        last_edge=None
+        while queue:
+            edge= queue.pop()
+            parent,node,dir=edge
+            dir_back=(dir+2)%len(DIRS)
+            if not following_earlier_turns and node in self.dagp:
+                joint_reached=True
+                break
+            if node in self.path_dict: # all arcs converge on start path
+                joint_reached=True
+                break
+
+            if node in seen_nodes:
+                continue
+            neis=self.neighbors(node,dir_back)
+            neis_it = neis if turn ==RIGHT else neis.reverse()
+            for nei,dir in neis:
+                nei_edge =(node,nei,dir)
+                nei_edge_back=(nei,node,(2+dir)%len(DIRS))
+                # the arc can start with already traversed edges: backwards if with the same turn
+                #   or forwards if with opposite turn
+                turn_fw =  self.dagp_edges.get(nei_edge)
+                turn_bw =  self.dagp_edges.get(nei_edge_back)
+                assert turn_fw==None or turn_bw==None
+                turn_consistent = False
+                if turn_fw!=None or turn_bw!=None:
+                    if not following_earlier_turns:
+                        break
+                    if turn_fw and turn_fw==-turn:
+                        turn_consistent=True
+                    elif turn_bw and turn_bw==turn:
+                        turn_consistent=True
+                    if not turn_consistent:
+                        following_earlier_turns=False
+                        break
+                else:
+                    following_earlier_turns=False
+
+                queue.append(nei_edge)
+                if not following_earlier_turns:
+                    arc_map[nei_edge] = edge
+                else:
+                    seen_edge=
+                    break # queue only one neighbor if already traversed
+
+        while queue:
+            q = queue.pop()
+            junction_map.setdefault(q[0], []).append(q)
+
+        if joint_reached:
+            while edge:
+                junction = junction_map.get(edge[1])
+                if junction:
+                    last_junction = last_junction or junction
+                    first_junction = junction
+                arc.append(edge)
+                edge = arc_map[edge]
+        return arc, first_junction, last_junction
 
     def arc_walk(self, start_edge, junc_edge, junction, turn, trunk_leave_index):
+
+        assert bool(junc_edge) == bool(junction)
+        # edge = junc_edge or start_edge
+        edge = start_edge
+
+        arc, first_junction, last_junction = self.dfs_walk(edge,turn)
+        if not arc:
+            return None,None,None
+
+        last_edge= arc[0]
+        if self.trunk_join[last_edge[1]] <= trunk_leave_index:  # return to main path behind our entry
+            return None, None, None
+        return list(reversed(arc)), first_junction, last_junction
+
+    def arc_walk_old(self, start_edge, junc_edge, junction, turn, trunk_leave_index):
         # parent,start_node = edge
         assert bool(junc_edge)==bool(junction)
         edge = junc_edge or start_edge
@@ -328,7 +412,7 @@ class connect_assessor_c:
                 break
             inc_dir_back = (inc_dir+2)%len(DIRS)
             next_nei=None
-            neis = self.get_neighbors(node,inc_dir_back)
+            neis = self.neighbors(node, inc_dir_back)
 
             if turn==RIGHT:
                 neis.reverse()
