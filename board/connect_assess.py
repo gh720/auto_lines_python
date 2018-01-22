@@ -224,57 +224,65 @@ class connect_assessor_c:
         # outline=[]
         # next_path=[([],None,None)]
         trunk_turn =0
-        expansions = [([],trunk_turn,dict())]
+        # expansions = [([],trunk_turn,dict())]
+
 
         dagp[start_path[-1]]=[]
+        expansion = ([],trunk_turn,dict())
         for node_i,node in enumerate(start_path):
             parent = None if node_i==0 else start_path[node_i-1]
             dir = None if parent==None else direction(parent,node)
             edge = (parent,node,dir)
-            # if (parent!=None):
-            #     add_to_dag(edge, trunk_turn)
+            if (parent!=None):
+                add_to_dag(edge, trunk_turn)
             junction = []
             if node_i < len(start_path)-1:
                 neis = self.neighbors(node,direction(node,start_path[node_i+1]))
                 junction = [ (node, *nei) for nei in neis if back_edge((node, *nei)) not in self.dagp_edges ]
-            expansions[0][0].append((edge,junction))
+            expansion[0].append((edge,junction))
             trunk_join[node]=node_i
+
+        arc_queue = deque()
+        arc_queue=deque([expansion])
 
         current_path=[]
         _counter=9
         all_arcs=self.all_arcs=[]
         iteration=0
-        scheduled=[]
-        while True:
-            if not expansions:
-                break
-            # current_expansions=copy.deepcopy(expansions)
-            arcs=[]
+        # scheduled=[]
+        while arc_queue:
+            expansion = arc_queue.popleft()
+            # if not expansions:
+            #     break
+            # # current_expansions=copy.deepcopy(expansions)
+            # arcs=[]
             iteration+=1
-            for i, expansion in enumerate(expansions):
+            if iteration==4:
+                debug=1
+            # for i, expansion in enumerate(expansions):
                 # arc,_trunk_leave_index,arc_turn = expansion
-                arc,arc_turn,meta = expansion
+            arc,arc_turn,meta = expansion
                 # arc_turn = meta.get('turn')
 
                 # if arc_turn==None:
                 #     arc_turn=0 # main trunk
+            scheduled=deque()
+            if arc:
+                arc_info = []
+                # first_edge,last_edge=arc[0],arc[-1]
+                # trunk_back_index=trunk_join[last_edge[1]]
+                # scheduled=[]
+                for arc_i, item in enumerate(arc):
+                    edge, _junction=item
+                    _cnt = counter
+                    arc_info.append((*edge, _cnt))
 
-                if arc:
-                    arc_info = []
-                    # first_edge,last_edge=arc[0],arc[-1]
-                    # trunk_back_index=trunk_join[last_edge[1]]
-                    for arc_i, item in enumerate(arc):
-                        edge, _junction=item
-                        _cnt = counter
-                        arc_info.append((*edge, _cnt))
-                        if edge[0]!=None: # starting node
-                            add_to_dag(edge, arc_turn)
-
-                        bw = back_edge(edge)[2] if edge[0]!=None else None
-                        fw = arc[arc_i+1][0][2] if arc_i < len(arc)-1 else None
-                        if fw == None:
-                            continue # last arc edge - don't need junctions
-                        junction = []
+                    bw = back_edge(edge)[2] if edge[0]!=None else None
+                    fw = arc[arc_i+1][0][2] if arc_i < len(arc)-1 else None
+                    if fw == None:
+                        continue # last arc edge - don't need junctions
+                    junction = []
+                    if _junction != None:
                         for junc_edge in _junction:
                             if junc_edge in self.dagp_edges:
                                 continue
@@ -291,15 +299,21 @@ class connect_assessor_c:
                                 assert arc_turn!=LEFT
                                 scheduled.append((right_branches[br_i], RIGHT))
 
-            expansions=[]
+            # expansions=[]
 
-            while scheduled:
-                edge, edge_turn = scheduled.pop()
-                next_arc = self.arc_walk(edge, edge_turn)
-                # next_arc = self.arc_walk(edge, turn, trunk_leave_index)
-                if next_arc:
-                    self.cycle_check(arc[0][0])
-                    expansions += [[next_arc, edge_turn, dict()]]
+                while scheduled:
+                    edge, edge_turn = scheduled.popleft()
+                    next_arc = self.arc_walk(edge, edge_turn)
+                    if not next_arc:
+                        continue
+                    for arc_edge, junction in next_arc:
+                        # if arc_edge[0] != None:  # starting node
+                        add_to_dag(arc_edge, edge_turn)
+
+                    # next_arc = self.arc_walk(edge, turn, trunk_leave_index)
+                    if next_arc:
+                        self.cycle_check(arc[0][0])
+                        arc_queue.append((next_arc, edge_turn, dict()))
                     # all_arcs.append([arc_info, trunk_ledve_index])
 
                 # for edge_i,edge in enumerate(arc):
@@ -611,15 +625,15 @@ class connect_assessor_c:
         arc  = self.dfs_walk(edge,turn)
         # arc , first_junction, last_junction = self.dfs_walk(edge,turn)
         if not arc:
-            return None,None,None
+            return None
         if arc[0][-1]==arc[-1][0]:
-            return None,None,None
+            return None
 
         # if self.trunk_join[last_edge[1]] <= trunk_leave_index:  # return to main path behind our entry
         #     return None, None, None
         reachable = self.reachable.get(arc[-1][0])
         if reachable and reachable.get(arc[0][1]):
-            return None,None,None
+            return None
         return list(reversed(arc)) # , first_junction, last_junction
 
     def arc_walk_old(self, start_edge, junc_edge, junction, turn, trunk_leave_index):
