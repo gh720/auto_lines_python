@@ -1,3 +1,5 @@
+from sched import scheduler
+
 import networkx as nx
 import random,math,copy
 import os, sys
@@ -43,6 +45,10 @@ for p in current_path
                 add_to_dag(c)
 
 '''
+
+
+def back_edge(edge):
+    return (edge[1], edge[0], (edge[2] + 2) % len(DIRS))
 
 class connect_assessor_c:
 
@@ -216,147 +222,285 @@ class connect_assessor_c:
             counter+=1
 
         # outline=[]
-        next_path=[([],None,None)]
+        # next_path=[([],None,None)]
+        trunk_turn =0
+        expansions = [([],trunk_turn,dict())]
+
         dagp[start_path[-1]]=[]
         for node_i,node in enumerate(start_path):
             parent = None if node_i==0 else start_path[node_i-1]
             dir = None if parent==None else direction(parent,node)
             edge = (parent,node,dir)
-            if (parent!=None):
-                add_to_dag(edge, turn=0)
-            next_path[0][0].append(edge)
+            # if (parent!=None):
+            #     add_to_dag(edge, trunk_turn)
+            junction = []
+            if node_i < len(start_path)-1:
+                neis = self.neighbors(node,direction(node,start_path[node_i+1]))
+                junction = [ (node, *nei) for nei in neis if back_edge((node, *nei)) not in self.dagp_edges ]
+            expansions[0][0].append((edge,junction))
             trunk_join[node]=node_i
 
         current_path=[]
         _counter=9
         all_arcs=self.all_arcs=[]
         iteration=0
+        scheduled=[]
         while True:
-            if not next_path:
+            if not expansions:
                 break
-            current_path=copy.deepcopy(next_path)
-            next_path=[]
+            # current_expansions=copy.deepcopy(expansions)
+            arcs=[]
             iteration+=1
-            for i, path in enumerate(current_path):
-                arc,_trunk_leave_index,arc_turn = path
-                if arc_turn==None:
-                    arc_turn=0 # main trunk
+            for i, expansion in enumerate(expansions):
+                # arc,_trunk_leave_index,arc_turn = expansion
+                arc,arc_turn,meta = expansion
+                # arc_turn = meta.get('turn')
 
-                for edge_i,edge in enumerate(arc):
-                    if counter>=_counter:
-                        debug=1
-                    parent,node,dir_prev= edge
-                    trunk_leave_index = _trunk_leave_index
-                    if trunk_leave_index==None:
-                        assert iteration==1
-                        trunk_leave_index=edge_i
+                # if arc_turn==None:
+                #     arc_turn=0 # main trunk
 
-                    edge_turn = dagp_edges.get(edge,0)
-                    assert edge_turn==arc_turn
-                    dir_prev_back=(dir_prev+2)%len(DIRS) if dir_prev!=None else None
-                    # dir_next = direction(node, next_node)
-                    dir_next  = None
-                    if edge_i < len(arc)-1 :
-                        dir_next = direction(node,arc[edge_i+1][1])
-                    else:
-                        break
-                    assert dir_next!=None # end node reached - should have exited loop earlier
-                    neis = self.neighbors(node, dir_next)
+                if arc:
+                    arc_info = []
+                    # first_edge,last_edge=arc[0],arc[-1]
+                    # trunk_back_index=trunk_join[last_edge[1]]
+                    for arc_i, item in enumerate(arc):
+                        edge, _junction=item
+                        _cnt = counter
+                        arc_info.append((*edge, _cnt))
+                        if edge[0]!=None: # starting node
+                            add_to_dag(edge, arc_turn)
 
-                    dir_back_suggested=None
-                    if dir_prev_back==None: # initial node - taking an arbitrary edge to separate left and right arcs
-                        if neis:
-                            dir_back_suggested = neis[(len(neis)-1)>>1][1]
-
-                    neis_avl=[]
-                    def _scope_218():
-                        for next_turn in [LEFT,RIGHT]:
-                            if arc_turn!=0 and next_turn!=arc_turn:
+                        bw = back_edge(edge)[2] if edge[0]!=None else None
+                        fw = arc[arc_i+1][0][2] if arc_i < len(arc)-1 else None
+                        if fw == None:
+                            continue # last arc edge - don't need junctions
+                        junction = []
+                        for junc_edge in _junction:
+                            if junc_edge in self.dagp_edges:
                                 continue
-                            if next_turn==RIGHT:
-                                neis.reverse()
+                            if back_edge(junc_edge) in self.dagp_edges:
+                                continue
+                            junction.append(junc_edge)
+                        left_branches, right_branches = self.balanced_turn(junction, fw, bw)
 
-                            for nei,nei_dir in neis:
-                                # assert turn ==LEFT or turn==RIGHT # arc cannot share an edge with main trunk
-                                edge = (node,nei,nei_dir)
-                                if nei_dir==dir_prev_back:
-                                    break
-                                back_dir = (nei_dir + 2) % len(DIRS)
-                                back_edge_turn = dagp_edges.get((nei, node, back_dir))
+                        for br_i in range(max(len(left_branches),len(right_branches))):
+                            if br_i < len(left_branches):
+                                assert arc_turn!=RIGHT
+                                scheduled.append((left_branches[br_i], LEFT))
+                            if br_i < len(right_branches):
+                                assert arc_turn!=LEFT
+                                scheduled.append((right_branches[br_i], RIGHT))
 
-                                skip = False
-                                if edge in dagp_edges: # TODO: fix later: skip=True
-                                    continue # should not happen - trying to through the edge twice
-                                if back_edge_turn!=None:
-                                    if back_edge_turn==0: # previous edge on main trunk - we iterated all edges between next and prev clockwise
-                                        skip=True
-                                    elif back_edge_turn==-next_turn: # that arc was traversed in opposite direction - skip
-                                        skip=True
-                                    else: # either back_edge_turn==turn or turn==0
-                                        neis_avl.append((edge, back_edge_turn))#
-                                else:
-                                    neis_avl.append((edge, next_turn))
-                                if nei_dir==dir_back_suggested:
-                                    break
+            expansions=[]
 
-                    _scope_218()
+            while scheduled:
+                edge, edge_turn = scheduled.pop()
+                next_arc = self.arc_walk(edge, edge_turn)
+                # next_arc = self.arc_walk(edge, turn, trunk_leave_index)
+                if next_arc:
+                    self.cycle_check(arc[0][0])
+                    expansions += [[next_arc, edge_turn, dict()]]
+                    # all_arcs.append([arc_info, trunk_ledve_index])
 
-                    def _scope_251():
-                        nonlocal next_path
-                        for nei_edge,turn in neis_avl:
-                            node,nei,dir = nei_edge
-                            back_dir=(dir+2)%len(DIRS)
-                            back_nei_edge=(nei_edge[1],nei_edge[0],back_dir)
-                            # nei_edge = (node,nei,dir)
-                            edge_turn = dagp_edges.get(nei_edge,None) # if nei_edge in dagp_edges else None
-                            back_edge_turn = dagp_edges.get((nei,node,back_dir),None) # if (nei,node,back_dir) in dagp_edges else None
-                            if counter>=_counter:
-                                debug=1
-                            junction =None
-                            junction_ordered=None
-                            if edge_turn!=None: # only happens if an edge scheduled for both left and right traversal
-                                assert turn==-edge_turn
-                                assert back_edge_turn==None
-                                junction = arc_junctions.get(nei_edge)
-                                junction_ordered = list(reversed(junction)) if junction else None
-
-                            elif back_edge_turn!=None:
-                                assert turn==back_edge_turn
-                                junction = arc_junctions.get(back_nei_edge,None)
-                                junction_ordered = junction if junction else None
-
-                            next_arc=first_junction=last_junction = None
-                            if junction_ordered:
-                                # if edge_turn!=None:
-                                for junc_edge in junction_ordered:
-                                    if not junc_edge in dagp_edges:
-                                        next_arc,first_junction,last_junction = self.arc_walk(nei_edge, junc_edge, junction, turn, trunk_leave_index)
-                                        break
-                                # else:
-                                #     for junc in reversed(junction):
-                                #         if not  junc in dagp_edges:
-                                #             next_arc,first_junction,last_junction = self.arc_walk(junc, turn, trunk_leave_index)
-                                #             break
-                            else:
-                                next_arc,first_junction, last_junction = self.arc_walk(nei_edge, None, None,  turn, trunk_leave_index)
-                            if next_arc:
-                                arc_info=[]
-                                first_edge,last_edge=next_arc[0],next_arc[-1]
-                                trunk_back_index=trunk_join[last_edge[1]]
-                                for i,edge in enumerate(next_arc):
-                                    _cnt=counter
-                                    arc_info.append((*edge, _cnt))
-                                    add_to_dag(edge, turn)
-                                    trunk_join[edge[1]]=trunk_back_index
-                                if first_junction:
-                                    arc_junctions[first_edge]=first_junction
-                                    arc_junctions[last_edge]=last_junction
-
-                                self.cycle_check(arc[0][0])
-                                next_path+=[[next_arc, trunk_leave_index, turn]]
-                                all_arcs.append([arc_info,trunk_leave_index])
-                    _scope_251()
+                # for edge_i,edge in enumerate(arc):
+                #     if counter>=_counter:
+                #         debug=1
+                #     parent,node,dir_prev= edge
+                #     # trunk_leave_index = _trunk_leave_index
+                #     # if trunk_leave_index==None:
+                #     #     assert iteration==1
+                #     #     trunk_leave_index=edge_i
+                #
+                #     edge_turn = dagp_edges.get(edge,0)
+                #     # assert edge_turn==arc_turn
+                #     dir_prev_back=(dir_prev+2)%len(DIRS) if dir_prev!=None else None
+                #     # dir_next = direction(node, next_node)
+                #     dir_next  = None
+                #     if edge_i < len(arc)-1 :
+                #         dir_next = direction(node,arc[edge_i+1][1])
+                #     else:
+                #         break
+                #     assert dir_next!=None # end node reached - should have exited loop earlier
+                #     neis = self.neighbors(node, dir_next)
+                #
+                #     dir_back_suggested=None
+                #     if dir_prev_back==None: # initial node - taking an arbitrary edge to separate left and right arcs
+                #         if neis:
+                #             dir_back_suggested = neis[(len(neis)-1)>>1][1]
+                #
+                #     neis_avl=[]
+                #     def _scope_218():
+                #         for next_turn in [LEFT,RIGHT]:
+                #             if arc_turn!=0 and next_turn!=arc_turn:
+                #                 continue
+                #             if next_turn==RIGHT:
+                #                 neis.reverse()
+                #
+                #             for nei,nei_dir in neis:
+                #                 # assert turn ==LEFT or turn==RIGHT # arc cannot share an edge with main trunk
+                #                 edge = (node,nei,nei_dir)
+                #                 if nei_dir==dir_prev_back:
+                #                     break
+                #                 back_dir = (nei_dir + 2) % len(DIRS)
+                #                 back_edge_turn = dagp_edges.get((nei, node, back_dir))
+                #
+                #                 skip = False
+                #                 if edge in dagp_edges: # TODO: fix later: skip=True
+                #                     continue # should not happen - trying to through the edge twice
+                #                 if back_edge_turn!=None:
+                #                     if back_edge_turn==0: # previous edge on main trunk - we iterated all edges between next and prev clockwise
+                #                         skip=True
+                #                     elif back_edge_turn==-next_turn: # that arc was traversed in opposite direction - skip
+                #                         skip=True
+                #                     else: # either back_edge_turn==turn or turn==0
+                #                         neis_avl.append((edge, back_edge_turn))#
+                #                 else:
+                #                     neis_avl.append((edge, next_turn))
+                #                 if nei_dir==dir_back_suggested:
+                #                     break
+                #
+                #     _scope_218()
+                #
+                #     def _scope_251():
+                #         nonlocal next_path
+                #         for nei_edge,turn in neis_avl:
+                #             node,nei,dir = nei_edge
+                #             back_dir=(dir+2)%len(DIRS)
+                #             back_nei_edge=(nei_edge[1],nei_edge[0],back_dir)
+                #             # nei_edge = (node,nei,dir)
+                #             edge_turn = dagp_edges.get(nei_edge,None) # if nei_edge in dagp_edges else None
+                #             back_edge_turn = dagp_edges.get((nei,node,back_dir),None) # if (nei,node,back_dir) in dagp_edges else None
+                #             if counter>=_counter:
+                #                 debug=1
+                #             junction =None
+                #             junction_ordered=None
+                #             if edge_turn!=None: # only happens if an edge scheduled for both left and right traversal
+                #                 assert turn==-edge_turn
+                #                 assert back_edge_turn==None
+                #                 junction = arc_junctions.get(nei_edge)
+                #                 junction_ordered = list(reversed(junction)) if junction else None
+                #
+                #             elif back_edge_turn!=None:
+                #                 assert turn==back_edge_turn
+                #                 junction = arc_junctions.get(back_nei_edge,None)
+                #                 junction_ordered = junction if junction else None
+                #
+                #             next_arc=first_junction=last_junction = None
+                #             if junction_ordered:
+                #                 # if edge_turn!=None:
+                #                 for junc_edge in junction_ordered:
+                #                     if not junc_edge in dagp_edges:
+                #                         next_arc,first_junction,last_junction = self.arc_walk(nei_edge, junc_edge, junction, turn, trunk_leave_index)
+                #                         break
+                #                 # else:
+                #                 #     for junc in reversed(junction):
+                #                 #         if not  junc in dagp_edges:
+                #                 #             next_arc,first_junction,last_junction = self.arc_walk(junc, turn, trunk_leave_index)
+                #                 #             break
+                #             else:
+                #                 # next_arc, junctions = self.arc_walk(nei_edge, None, None,  turn, trunk_leave_index)
+                #                 next_arc = self.arc_walk(nei_edge, turn, trunk_leave_index)
+                #             # if next_arc:
+                #             #     arc_info=[]
+                #             #     # first_edge,last_edge=next_arc[0],next_arc[-1]
+                #             #     # trunk_back_index=trunk_join[last_edge[1]]
+                #             #     for i,edge,_junction in enumerate(next_arc):
+                #             #         _cnt=counter
+                #             #         arc_info.append((*edge, _cnt))
+                #             #         add_to_dag(edge, turn)
+                #             #         fw= edge[2]
+                #             #         bw = next_arc[i-1][1][2] if i < len(arc)-1 else None
+                #             #         junction=[]
+                #             #         for junc_edge in _junction:
+                #             #             if junc_edge in self.dagp_edges:
+                #             #                 continue
+                #             #             if back_edge(junc_edge) in self.dagp_edges:
+                #             #                 continue
+                #             #             junction.append(junc_edge)
+                #             #         left, right = self.balanced_turn(junction,fw,bw)
+                #             #
+                #             #         for junc_edge in left:
+                #             #             scheduled.append(junc_edge, LEFT)
+                #             #         for junc_edge in right:
+                #             #             scheduled.append(junc_edge, RIGHT)
+                #
+                #                     # trunk_join[edge[1]]=trunk_back_index
+                #                 # for junc in junctions:
+                #                 # if first_junction:
+                #                 #     arc_junctions[first_edge]=first_junction
+                #                 #     arc_junctions[last_edge]=last_junction
+                #
+                #                 self.cycle_check(arc[0][0])
+                #                 next_path+=[[next_arc, trunk_leave_index, turn]]
+                #                 all_arcs.append([arc_info,trunk_leave_index])
+                #     _scope_251()
         return dagp_edges
+
+
+    def balanced_turn(self, junctions, fw, bw):
+        assert fw!=None
+        assert fw!=bw
+        left=[]
+        right=[]
+
+        jar = [None]*4
+        for i,junc in enumerate(junctions):
+            jar[junc[2]]=junc
+            assert fw!=junc[2]
+            assert bw!=junc[2]
+
+        if bw !=None and fw !=None:
+            bw_seen = False
+            dir = fw
+            while True:
+                dir = ( dir + 1 )% len (DIRS)
+                if dir == fw:
+                    break
+                if dir == bw:
+                    bw_seen=True
+                if jar[dir]:
+                    if bw_seen:
+                        right.insert(0,jar[dir])
+                    else:
+                        left.append(jar[dir])
+        elif bw==None:
+            # counter=0
+            dir = fw
+            bw_sugg = (fw + 2) % len(DIRS)
+            bw_seen = False
+            while True:
+                dir = (dir + 1) % len(DIRS)
+                if dir == fw:
+                    break
+                if dir == bw_sugg:
+                    bw_seen = True
+                if jar[dir]:
+                    if not bw_seen:
+                    # if counter<(len(junctions)>>1):
+                        left.append(jar[dir])
+                    else:
+                        right.insert(0,jar[dir])
+                    # counter+=1
+        elif fw == None:
+            # counter = 0
+            dir = bw
+            fw_sugg = (bw + 2) % len(DIRS)
+            fw_seen = False
+            while True:
+                dir = (dir + 1) % len(DIRS)
+                if dir == bw:
+                    break
+                if dir == fw_sugg:
+                    fw_seen = True
+                if jar[dir]:
+                    if fw_seen:
+                    # if counter >= (len(junctions) >> 1):
+                        left.append(jar[dir])
+                    else:
+                        right.insert(0, jar[dir])
+                    # counter += 1
+
+        return left, right
 
     def dfs_walk(self, start_edge, turn):
         queue=deque([start_edge])
@@ -451,20 +595,21 @@ class connect_assessor_c:
         if joint_reached:
             while edge:
                 junction = junction_map.get(edge[1])
-                if junction:
-                    last_junction = last_junction or junction
-                    first_junction = junction
-                arc.append(edge)
+                # if junction:
+                #     last_junction = last_junction or junction
+                #     first_junction = junction
+                arc.append((edge,junction))
                 edge = arc_map.get(edge)
-        return arc, first_junction, last_junction
+        return arc #, first_junction, last_junction
 
-    def arc_walk(self, start_edge, junc_edge, junction, turn, trunk_leave_index):
-
-        assert bool(junc_edge) == bool(junction)
+    # def arc_walk(self, start_edge, junc_edge, junction, turn, trunk_leave_index):
+    def arc_walk(self, start_edge, turn):
+        # assert bool(junc_edge) == bool(junction)
         # edge = junc_edge or start_edge
         edge = start_edge
 
-        arc, first_junction, last_junction = self.dfs_walk(edge,turn)
+        arc  = self.dfs_walk(edge,turn)
+        # arc , first_junction, last_junction = self.dfs_walk(edge,turn)
         if not arc:
             return None,None,None
         if arc[0][-1]==arc[-1][0]:
@@ -475,7 +620,7 @@ class connect_assessor_c:
         reachable = self.reachable.get(arc[-1][0])
         if reachable and reachable.get(arc[0][1]):
             return None,None,None
-        return list(reversed(arc)), first_junction, last_junction
+        return list(reversed(arc)) # , first_junction, last_junction
 
     def arc_walk_old(self, start_edge, junc_edge, junction, turn, trunk_leave_index):
         # parent,start_node = edge
