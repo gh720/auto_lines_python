@@ -104,7 +104,7 @@ class connect_assessor_c:
     def ge(self,edges):
         return [(edge[0], edge[1]) for edge in edges]
 
-    def _sp(self):
+    def _sp(self,block=False):
         import matplotlib.pyplot as plt
 
         dags_by_dir =[x[:] for x in [[]] * 4]
@@ -158,7 +158,7 @@ class connect_assessor_c:
             _=nx.draw_networkx_edge_labels(LG,pos=left_pos , label_pos=0.3, edge_labels=left_labels, font_color='lime')
             _=nx.draw_networkx_edge_labels(RG,pos=right_pos , label_pos=0.3, edge_labels=right_labels, font_color='r')
 
-        plt.show(block=True)
+        plt.show(block=block)
 
 
     def cycle_check(self,start_node):
@@ -252,13 +252,15 @@ class connect_assessor_c:
         arc_queue=deque([expansion])
 
         iteration=0
+        scheduled = deque()
+        scheduled_late = list()
         while arc_queue:
             expansion = arc_queue.popleft()
             iteration+=1
             if iteration==17:
                 debug=1
             arc,arc_turn,meta = expansion
-            scheduled=deque()
+
             if arc:
                 arc_info = []
                 for arc_i, item in enumerate(arc):
@@ -297,67 +299,78 @@ class connect_assessor_c:
 
             # expansions=[]
 
-                while scheduled:
-                    edge, suggested_turn = scheduled.popleft()
-                    tup, next_arc, arc_back, sum_of_turns,*_ = [None]*10
-                    for edge_turn in [suggested_turn,-suggested_turn]:
+                def process_item(item):
+                    nonlocal self
+                    edge, suggested_turn = item
+                    tup, next_arc, arc_back, sum_of_turns, cycle_found, *_ = [None] * 10
+                    for edge_turn in [suggested_turn, -suggested_turn]:
                         outer_turn = self.outer_edges.get(edge)
-                        if outer_turn == edge_turn: # if this will traverse outer cycle retry with opposite turn
+                        if outer_turn == edge_turn:  # if this will traverse outer cycle retry with opposite turn
                             continue
-                        tup=self.arc_walk(edge, edge_turn)
+                        tup = self.arc_walk(edge, edge_turn)
                         if not type(tup) is tuple:
-                            if tup=='noose':
+                            if tup == 'noose':
+                                break
+                            if tup == 'cycle':
+                                cycle_found = True
                                 continue
-                            if tup=='cycle':
+                            if tup == 'cycle_part':
                                 continue
-                            break # other cases, whatever
+                            break  # other cases, whatever
                         _next_arc, arc_back, sum_of_turns = tup
                         if not sum_of_turns:
                             assert False
-                        if ( sum_of_turns < 0 and edge_turn==LEFT
-                                or sum_of_turns > 0 and edge_turn==RIGHT):
+                        if (sum_of_turns < 0 and edge_turn == LEFT
+                                or sum_of_turns > 0 and edge_turn == RIGHT):
                             self.outer_cycle = _next_arc + arc_back
-                            for outer_edge,junction in self.outer_cycle:
-                                self.outer_edges[outer_edge]=edge_turn
-                                self.outer_edges[back_edge(outer_edge)]=-edge_turn
+                            for outer_edge, junction in self.outer_cycle:
+                                self.outer_edges[outer_edge] = edge_turn
+                                self.outer_edges[back_edge(outer_edge)] = -edge_turn
                             continue
-                        next_arc=_next_arc
-                        break # normal arc
+                        next_arc = _next_arc
+                        break  # normal arc
 
                     if not next_arc:
-                        continue
-                    peer_faces=dict()
+                        if cycle_found:
+                            scheduled_late.append((edge, suggested_turn))
+                        return
+
+                    face_turn = LEFT if sum_of_turns > 0 else RIGHT
+                    peer_faces = dict()
                     for arc_edge, junction in arc_back:
-                        fw_face=e2face.get(arc_edge)
-                        bw_face=e2face.get(back_edge(arc_edge))
+                        fw_face = e2face.get(arc_edge)
+                        bw_face = e2face.get(back_edge(arc_edge))
                         if bool(fw_face) and bool(bw_face):
                             assert False
-                        peer_turn = None
                         if fw_face:
-                            if self.faces[fw_face]['turn']==edge_turn:
-                                assert False
-                            peer_faces[fw_face]='from' if edge_turn==RIGHT else 'to'
+                            peer_faces[fw_face] = 'from' if face_turn == RIGHT else 'to'
                         elif bw_face:
-                            if self.faces[bw_face]['turn'] != edge_turn:
-                                assert False
-                            peer_faces[bw_face]='from' if edge_turn==LEFT else 'to'
+                            peer_faces[bw_face] = 'from' if face_turn == LEFT else 'to'
 
-                    arc_face=None
+                    arc_face = None
                     for arc_edge, junction in next_arc:
                         add_to_dag(arc_edge, edge_turn)
                         if not arc_face:
                             arc_face = arc_edge
                         e2face[arc_edge] = arc_face
-                        face_obj = faces.setdefault(arc_face, { 'edges':dict(), 'turn': edge_turn })
+                        face_obj = faces.setdefault(arc_face, {'edges': dict(), 'turn': face_turn})
                     for peer_face, face_dir in peer_faces.items():
-                        if face_dir=='from':
-                            dual_edges[(peer_face,arc_face)]=1
+                        if face_dir == 'from':
+                            dual_edges[(peer_face, arc_face)] = 1
                         else:
-                            dual_edges[(arc_face, peer_face)]=1
+                            dual_edges[(arc_face, peer_face)] = 1
 
                     if next_arc:
                         self.cycle_check(next_arc[0][0][1])
                         arc_queue.append((next_arc, edge_turn, dict()))
+
+                while scheduled:
+                    item = scheduled.popleft()
+                    process_item(item)
+
+        for item_i in range(len(scheduled_late)):
+            process_item(scheduled_late[item_i])
+
         return dagp_edges
 
 
@@ -474,9 +487,6 @@ class connect_assessor_c:
             parent,node,dir=edge
             dir_back=(dir+2)%len(DIRS)
 
-            if node in seen_nodes:
-                continue
-            seen_nodes[node] = 1
 
             if not following_earlier_turns and node in self.dagp:
                 joint_reached=True
@@ -485,6 +495,9 @@ class connect_assessor_c:
                 joint_reached=True
                 break
 
+            if node in seen_nodes: # late checking, so cycles are returned, but "nooses" aren't
+                continue
+            seen_nodes[node] = 1
 
             neis=self.neighbors(node,dir_back)
             neis_it = neis if turn ==RIGHT else neis.reverse()
@@ -540,14 +553,14 @@ class connect_assessor_c:
     def arc_walk(self, start_edge, turn):
         arc  = self.dfs_walk(start_edge,turn)
         if not arc:
-            return 'deadend'  #  dead end
+            return 'noose'  #  dead end
         if arc[0][0][1]==arc[-1][0][0]:
-            return 'noose'  #  cycle
+            return 'cycle'  #  cycle
 
 
         reachable = self.reachable_parents.get(arc[-1][0][0]) # BETTER: classes instead of tuples
         if reachable and reachable.get(arc[0][0][1]):
-            return 'cycle' # forms a cycle
+            return 'cycle_part' # forms a cycle
 
         arc_back = self.dfs_walk_back(arc[0][0], start_edge[0], turn)
         assert bool(arc_back)
