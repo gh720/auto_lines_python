@@ -168,11 +168,13 @@ class connect_assessor_c:
                                , edgelist=[ v[0] for v in face_starting_edges ]
                                , edge_color=[ v[1] for v in face_starting_edges ]
                                , width=2.0)
-        de_parents=dict()
-        de_children=dict()
-        for de in self.dual_edges:
-            de_parents.setdefault(de[1], dict())[de[0]]=1
-            de_children.setdefault(de[0], dict())[de[1]]=1
+        # de_parents=dict()
+        # de_children=dict()
+        edge2dual={ de[2]:de for de in self.dual_edges }
+        # for de in self.dual_edges:
+        #     edge2dual[de[2]]=de
+            # de_parents.setdefault(de[1], dict())[de[0]]=de[2]
+            # de_children.setdefault(de[0], dict())[de[1]]=de[2]
 
         de_edges_by_dir = [x[:] for x in [[]] * 4]
 
@@ -181,19 +183,33 @@ class connect_assessor_c:
             # if not self.faces[face]['edges'][edge]:
             #     assert False
             if not face: continue
-            parents = de_parents.get(face,[])
-            children = de_children.get(face,[])
-            incoming=None
-            for linked_faces in [parents, children]:
-                for link in linked_faces:
-                    if self.faces[link]['edges'].get(edge):
-                        incoming=(linked_faces==parents)
-                rotate = None
-                if (incoming==True)!=(edge_turn==0):
-                    rotate = self.faces[face]['turn']
-                else:
-                    rotate = -self.faces[face]['turn']
-                de_edges_by_dir[edge[2]].append((edge,rotate))
+
+            de=edge2dual.get(edge)
+            rotate = self.faces[face]['turn']
+
+            if face==de[0]: #
+                rotate = -self.faces[face]['turn']
+            elif face==de[1]:
+                rotate = self.faces[face]['turn']
+            else:
+                assert False
+            if (edge_turn==0):
+                rotate=-rotate
+            de_edges_by_dir[edge[2]].append((edge, rotate))
+
+            # parents = de_parents.get(face,[])
+            # children = de_children.get(face,[])
+            # incoming=None
+            # for linked_faces in [parents, children]:
+            #     for link in linked_faces:
+            #         if self.faces[link]['edges'].get(edge):
+            #             incoming=(linked_faces==parents)
+            #     rotate = None
+            #     if (incoming==True)!=(edge_turn==0):
+            #         rotate = self.faces[face]['turn']
+            #     else:
+            #         rotate = -self.faces[face]['turn']
+            #     de_edges_by_dir[edge[2]].append((edge,rotate))
 
         # for edge,rotate in de_edges:
         #     de_edges_by_dir[edge[2]].append((edge,rotate))
@@ -419,11 +435,11 @@ class connect_assessor_c:
                         de_edge=None
                         if fw_face:
                             # peer_faces[fw_face] = 'from' if face_turn == RIGHT else 'to'
-                            de_edge = (fw_face, arc_face) if face_turn==RIGHT else (arc_face, fw_face)
+                            de_edge = (fw_face, arc_face, arc_edge) if face_turn==RIGHT else (arc_face, fw_face, arc_edge)
                             faces[arc_face]['edges'][arc_edge] = 1
                         elif bw_face:
                             # peer_faces[bw_face] = 'from' if face_turn == LEFT else 'to'
-                            de_edge = (bw_face, arc_face) if face_turn == LEFT else (arc_face, bw_face)
+                            de_edge = (bw_face, arc_face, back_edge(arc_edge)) if face_turn == LEFT else (arc_face, bw_face, back_edge(arc_edge))
                             faces[arc_face]['edges'][back_edge(arc_edge)] = 1
 
                         assert de_edge
@@ -461,12 +477,16 @@ class connect_assessor_c:
                     face_turn = self.faces[peer_face]['turn']
                     if self.dagp_edges.get(peer_edge)==0:
                         face_turn=-face_turn
-                    de_edge = (outer_face, peer_face) if face_turn == RIGHT else (peer_face, outer_face)
+                    de_edge = (outer_face, peer_face, peer_edge) if face_turn == RIGHT else (peer_face, outer_face, peer_edge)
                     self.faces.setdefault(outer_face, {'edges': dict(), 'turn': LEFT})['edges'][peer_edge] = 1
                     break
                 assert de_edge
                 dual_edges[de_edge] = 1
         process_outer_cycle()
+
+        def check_dual_graph():
+            pass
+
 
         return dagp_edges
 
