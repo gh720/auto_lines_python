@@ -7,6 +7,7 @@ from random import randrange,randint
 from collections import deque,defaultdict
 from attrdict import AttrDict
 from pprint import pprint as pp
+import itertools
 
 
 # PACKAGE_PARENT = '..'
@@ -56,6 +57,7 @@ class connect_assessor_c:
 
     def __init__(self,G):
         self.G=G
+        self.faceG=nx.DiGraph()
 
     def assess_connection(self,start,end):
         self.path = nx.shortest_path(start,end)
@@ -104,10 +106,6 @@ class connect_assessor_c:
 
     def _sp(self):
         import matplotlib.pyplot as plt
-
-
-
-        # import pdb; pdb.set_trace() #DDD 
 
         dags_by_dir =[x[:] for x in [[]] * 4]
         for edge in self.dagp_edges:
@@ -160,7 +158,7 @@ class connect_assessor_c:
             _=nx.draw_networkx_edge_labels(LG,pos=left_pos , label_pos=0.3, edge_labels=left_labels, font_color='lime')
             _=nx.draw_networkx_edge_labels(RG,pos=right_pos , label_pos=0.3, edge_labels=right_labels, font_color='r')
 
-        plt.show()
+        plt.show(block=True)
 
 
     def cycle_check(self,start_node):
@@ -176,20 +174,31 @@ class connect_assessor_c:
             parents=self.dagp_rev.get(node)
             if parents:
                 for parent in parents:
-                    dfs(parent)
+                    dfs(parent[0])
             node_state[node]=2
+        dfs(start_node)
         return
 
 
     def update_reachability(self,node):
+        reachable_parents={node:1}
+        reachable_children={node:1}
         parents = self.dagp_rev.get(node)
         if parents:
-            reachable=dict()
             for parent in parents:
-                prs = self.reachable.get(parent,dict())
+                prs = self.reachable_parents.get(parent[0], dict({parent[0]:1}))
                 for pr in prs:
-                    reachable[pr]=1
-            self.reachable[node]=reachable
+                    reachable_parents[pr] = 1
+        children = self.dagp.get(node)
+        if children:
+            for child in children:
+                chs = self.reachable_children.get(child[0], dict({child[0]:1}))
+                for ch in chs:
+                    reachable_children[ch] = 1
+        for pr in reachable_parents:
+            for ch in reachable_children:
+                self.reachable_parents.setdefault(ch,dict())[pr]=1
+                self.reachable_children.setdefault(pr, dict())[ch] = 1
 
     def cycles_along_path(self, start_path):
         arc_junctions=self.arc_junctions=dict()
@@ -200,8 +209,15 @@ class connect_assessor_c:
         dagp_edges=self.dagp_edges=dict()
         trunk_join=self.trunk_join=dict()
         order = self.order=dict()
-        reachable = self.reachable=defaultdict(dict)
+        self.reachable_parents=dict()
+        self.reachable_children=dict()
         counter=0
+        e2face=self.e2face=dict()
+        faces=self.faces=dict()
+        dual_edges=self.dual_edges=dict()
+        outer_cycle= self.outer_cycle=[]
+        outer_edges= self.outer_edges=dict()
+
 
 
         def add_to_dag(edge,turn):
@@ -209,17 +225,15 @@ class connect_assessor_c:
             parent,node,dir=edge
             if edge in dagp_edges:
                 assert False
-            if node==(3,6):
-                debug=1
-            dagp.setdefault(parent,[]).append((node,dir,counter))
-            dagp_rev.setdefault(node,[]).append((parent,dir,counter))
-            dagp_edges[edge] = turn
+            if parent!=None:
+                dagp.setdefault(parent,[]).append((node,dir,counter))
+                dagp_rev.setdefault(node,[]).append((parent,dir,counter))
+                dagp_edges[edge] = turn
+                order[edge] = counter
+                counter += 1
             self.update_reachability(node)
-            order[edge]=counter
-            counter+=1
 
         trunk_turn =0
-
 
         dagp[start_path[-1]]=[]
         expansion = ([],trunk_turn,dict())
@@ -227,8 +241,7 @@ class connect_assessor_c:
             parent = None if node_i==0 else start_path[node_i-1]
             dir = None if parent==None else direction(parent,node)
             edge = (parent,node,dir)
-            if (parent!=None):
-                add_to_dag(edge, trunk_turn)
+            add_to_dag(edge, trunk_turn)
             junction = []
             if node_i < len(start_path)-1:
                 neis = self.neighbors(node,direction(node,start_path[node_i+1]))
@@ -242,7 +255,7 @@ class connect_assessor_c:
         while arc_queue:
             expansion = arc_queue.popleft()
             iteration+=1
-            if iteration==4:
+            if iteration==17:
                 debug=1
             arc,arc_turn,meta = expansion
             scheduled=deque()
@@ -260,12 +273,19 @@ class connect_assessor_c:
                     junction = []
                     if _junction != None:
                         for junc_edge in _junction:
+                            if junc_edge == ((5, 7), (4, 7), 3):
+                                debug = 1
                             if junc_edge in self.dagp_edges:
                                 continue
                             if back_edge(junc_edge) in self.dagp_edges:
                                 continue
                             junction.append(junc_edge)
                         left_branches, right_branches = self.balanced_turn(junction, fw, bw)
+
+                        # for br in left_branches:
+                        #     scheduled.append((br, LEFT))
+                        # for br in reversed(right_branches):
+                        #     scheduled.append((br, RIGHT))
 
                         for br_i in range(max(len(left_branches),len(right_branches))):
                             if br_i < len(left_branches):
@@ -278,15 +298,65 @@ class connect_assessor_c:
             # expansions=[]
 
                 while scheduled:
-                    edge, edge_turn = scheduled.popleft()
-                    next_arc = self.arc_walk(edge, edge_turn)
+                    edge, suggested_turn = scheduled.popleft()
+                    tup, next_arc, arc_back, sum_of_turns,*_ = [None]*10
+                    for edge_turn in [suggested_turn,-suggested_turn]:
+                        outer_turn = self.outer_edges.get(edge)
+                        if outer_turn == edge_turn: # if this will traverse outer cycle retry with opposite turn
+                            continue
+                        tup=self.arc_walk(edge, edge_turn)
+                        if not type(tup) is tuple:
+                            if tup=='noose':
+                                continue
+                            if tup=='cycle':
+                                continue
+                            break # other cases, whatever
+                        _next_arc, arc_back, sum_of_turns = tup
+                        if not sum_of_turns:
+                            assert False
+                        if ( sum_of_turns < 0 and edge_turn==LEFT
+                                or sum_of_turns > 0 and edge_turn==RIGHT):
+                            self.outer_cycle = _next_arc + arc_back
+                            for outer_edge,junction in self.outer_cycle:
+                                self.outer_edges[outer_edge]=edge_turn
+                                self.outer_edges[back_edge(outer_edge)]=-edge_turn
+                            continue
+                        next_arc=_next_arc
+                        break # normal arc
+
                     if not next_arc:
                         continue
+                    peer_faces=dict()
+                    for arc_edge, junction in arc_back:
+                        fw_face=e2face.get(arc_edge)
+                        bw_face=e2face.get(back_edge(arc_edge))
+                        if bool(fw_face) and bool(bw_face):
+                            assert False
+                        peer_turn = None
+                        if fw_face:
+                            if self.faces[fw_face]['turn']==edge_turn:
+                                assert False
+                            peer_faces[fw_face]='from' if edge_turn==RIGHT else 'to'
+                        elif bw_face:
+                            if self.faces[bw_face]['turn'] != edge_turn:
+                                assert False
+                            peer_faces[bw_face]='from' if edge_turn==LEFT else 'to'
+
+                    arc_face=None
                     for arc_edge, junction in next_arc:
                         add_to_dag(arc_edge, edge_turn)
+                        if not arc_face:
+                            arc_face = arc_edge
+                        e2face[arc_edge] = arc_face
+                        face_obj = faces.setdefault(arc_face, { 'edges':dict(), 'turn': edge_turn })
+                    for peer_face, face_dir in peer_faces.items():
+                        if face_dir=='from':
+                            dual_edges[(peer_face,arc_face)]=1
+                        else:
+                            dual_edges[(arc_face, peer_face)]=1
 
                     if next_arc:
-                        self.cycle_check(arc[0][0])
+                        self.cycle_check(next_arc[0][0][1])
                         arc_queue.append((next_arc, edge_turn, dict()))
         return dagp_edges
 
@@ -359,12 +429,14 @@ class connect_assessor_c:
     def dfs_walk(self, start_edge, turn):
         queue=deque([start_edge])
         # queue.append(start_edge)
-        seen_nodes={start_edge[0]:1}
+        # seen_nodes={start_edge[0]:1}
+        seen_nodes=dict()
         arc=[]
         arc_map=dict()
         junction_map=dict()
         first_junction=last_junction=None
-        following_earlier_turns=True
+        # following_earlier_turns=True
+        following_earlier_turns=False # no more
         # new_edges=False
         joint_reached = False
         first_edge=None
@@ -426,26 +498,69 @@ class connect_assessor_c:
             q = queue.pop()
             junction_map.setdefault(q[0], []).append(q)
 
-        if joint_reached:
-            while edge:
-                junction = junction_map.get(edge[1])
-                arc.append((edge,junction))
-                edge = arc_map.get(edge)
+        if not joint_reached:
+            return []
+        while edge:
+            junction = junction_map.get(edge[1])
+            arc.append((edge,junction))
+            edge = arc_map.get(edge)
+        return arc
+
+    def dfs_walk_back(self, start_edge, end_node, turn):
+        queue = deque([start_edge])
+        arc = []
+        arc_map = dict()
+        seen_nodes=dict()
+        while queue:
+            edge = queue.pop()
+            parent, node, dir = edge
+            dir_back = back_edge(edge)[2]
+
+            if node in seen_nodes:
+                continue
+
+            seen_nodes[node] = 1
+
+            if node==end_node:
+                break
+
+            neis = self.neighbors(node, dir_back)
+            neis_it = neis if turn == RIGHT else neis.reverse()
+            for nei, dir in neis:
+                nei_edge = (node, nei, dir)
+                queue.append(nei_edge)
+                if edge!=start_edge:
+                    arc_map[nei_edge] = edge
+
+        while edge:
+            arc.append((edge, None))
+            edge = arc_map.get(edge)
         return arc
 
     def arc_walk(self, start_edge, turn):
-        edge = start_edge
-
-        arc  = self.dfs_walk(edge,turn)
+        arc  = self.dfs_walk(start_edge,turn)
         if not arc:
-            return None
-        if arc[0][-1]==arc[-1][0]:
-            return None
+            return 'deadend'  #  dead end
+        if arc[0][0][1]==arc[-1][0][0]:
+            return 'noose'  #  cycle
 
-        reachable = self.reachable.get(arc[-1][0])
-        if reachable and reachable.get(arc[0][1]):
-            return None
-        return list(reversed(arc))
+
+        reachable = self.reachable_parents.get(arc[-1][0][0]) # BETTER: classes instead of tuples
+        if reachable and reachable.get(arc[0][0][1]):
+            return 'cycle' # forms a cycle
+
+        arc_back = self.dfs_walk_back(arc[0][0], start_edge[0], turn)
+        assert bool(arc_back)
+
+        sum_of_turns=0
+        prev_edge=None
+        for edge,junction in itertools.chain(arc_back,arc):
+            if prev_edge:
+                _turns=(turns(prev_edge[2],edge[2])+2)%len(DIRS)-2
+                sum_of_turns += _turns
+                # sum_of_turns+=(edge[2]-prev_edge[2]+len(DIRS))%len(DIRS)
+            prev_edge=edge
+        return (list(reversed(arc)), list(reversed(arc_back)), sum_of_turns)
 
     def assess_path(self,path):
         G=self.G
