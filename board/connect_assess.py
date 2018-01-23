@@ -218,8 +218,6 @@ class connect_assessor_c:
         outer_cycle= self.outer_cycle=[]
         outer_edges= self.outer_edges=dict()
 
-
-
         def add_to_dag(edge,turn):
             nonlocal counter, self
             parent,node,dir=edge
