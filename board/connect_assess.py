@@ -55,7 +55,7 @@ def back_edge(edge):
 class connect_assessor_c:
 
     cycle_sets=AttrDict()
-    debug_edge = ((4, 1), (4, 0), 2)
+    debug_edge = ((2, 7), (1, 7), 3)
     debug_edges = [debug_edge, back_edge(debug_edge)]
     debug_face = ((4, 4), (3, 4), 3)
     debug_face2 = ((None), (None), 1)
@@ -87,8 +87,10 @@ class connect_assessor_c:
     # def check_turn_direction(self, a,b,c):
     #     assert False
 
-    def next_face_name(self):
-        return 'skipped_'+str(len(self.faces))
+    def next_face_name(self, prefix=None):
+        if prefix==None:
+            prefix='skipped_'
+        return prefix + str(len(self.faces))
 
     def get_nodes_dict(self, nodes):
         d=  { node:i for i,node in enumerate(nodes) }
@@ -171,9 +173,15 @@ class connect_assessor_c:
             _=nx.draw_networkx_edge_labels(LG,pos=left_pos , label_pos=0.3, edge_labels=left_labels, font_color='lime')
             _=nx.draw_networkx_edge_labels(RG,pos=right_pos , label_pos=0.3, edge_labels=right_labels, font_color='r')
 
-        face_starting_edges = [ (face, 'lime' if self.faces[face]['turn']==LEFT else 'r' )
-                                    for face in self.faces
-                                        if face!=self.outer_face and not re.match('^skipped',str(face))]
+        face_starting_edges=[]
+        for face in self.faces:
+            for edge in self.faces[face]['edges']:
+                s_edge = self.e2face.get(edge,[None])[0]
+                if s_edge:
+                    face_starting_edges.append((edge, 'lime' if self.faces[face]['turn']==LEFT else 'r') )
+        # face_starting_edges = [ (self.e2fac, 'lime' if self.faces[face]['turn']==LEFT else 'r' )
+        #                             for face in self.faces
+        #                                 if face!=self.outer_face and not re.match('^skipped',str(face))]
         nx.draw_networkx_edges(DFG,pos=gna(G,'pos')
                                , edgelist=[ v[0] for v in face_starting_edges ]
                                , edge_color=[ v[1] for v in face_starting_edges ]
@@ -572,7 +580,22 @@ class connect_assessor_c:
     def check_missed_faces(self):
         for edge,edge_turn in self.dagp_edges.items():
             faces=self.e2face.get(edge)
-            if not faces: # path edge that belongs to outer face only
+            if not faces: # bridge edge - outer face on both sides
+                # sanity check - a bridge can't make a cycle
+                for turn in LEFT,RIGHT:
+                    cycle=self.dfs_walk_back(edge,edge[0],turn)
+                    if cycle:
+                        assert False
+                if edge[0] not in self.path_dict or edge[1] not in self.path_dict:
+                    assert False
+                # face=self.next_face_name('bridge_cut_')
+                face='outer'
+                if not face in self.faces:
+                    self.add_face(face, [], [(edge,None)], LEFT)
+                self.e2face[edge]=[face,face]
+                self.faces[face]['edges'][edge]=1
+                de_edge = (face, face, edge)
+                self.dual_edges[de_edge]=1
                 continue
             if len(faces)!=2:
                 assert False
@@ -795,6 +818,8 @@ class connect_assessor_c:
                 nei_edge = (node, nei, dir)
                 queue.append(nei_edge)
                 arc_map[nei_edge] = edge
+        else:
+            return arc # no cycle found
 
         while edge:
             arc.append((edge, None))
