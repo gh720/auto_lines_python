@@ -538,7 +538,7 @@ class Board_graph:
 
 
     @staticmethod
-    def assess_path(G, start, end):
+    def assess_connection(G, start, end):
         ca = connect_assessor_c(G)
         path = nx.shortest_path(G, start,end)
         ca.cycles_along_path(path)
