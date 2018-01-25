@@ -1,3 +1,4 @@
+
 from sched import scheduler
 
 import networkx as nx
@@ -120,7 +121,7 @@ class connect_assessor_c:
         import matplotlib.pyplot as plt
 
         G = self.dualG
-        plt.figure(1, figsize=(8, 8))
+        plt.figure(1, figsize=(6, 6))
         pos = nx.shell_layout(G) # nx.kamada_kawai_layout(G) # nx.fruchterman_reingold_layout(G) #.spring_layout(G)
         nx.draw(G, pos=pos)
         labels = { node: pprint.pformat((node[0],node[1]))  for node in G.nodes }
@@ -143,7 +144,7 @@ class connect_assessor_c:
         # FFG=G.copy()
         DFG=G.copy().to_directed()
         # nx.set_edge_attributes(DFG,1,'capacity')
-        plt.figure(1,figsize=(8,8))
+        plt.figure(1,figsize=(6,6))
         nx.draw(G, pos=gna(G,'pos'))
         #gh = nx.gomory_hu_tree(FFG)
         #uno_cycles = nx.cycle_basis(FFG)
@@ -210,16 +211,25 @@ class connect_assessor_c:
             if not face: continue
 
             de=edge2dual.get(edge)
-            rotate = self.faces[face]['turn']
 
-            if face==de[0]: #
-                rotate = -self.faces[face]['turn']
-            elif face==de[1]:
-                rotate = self.faces[face]['turn']
-            else:
-                assert False
-            if (edge_turn==0):
-                rotate=-rotate
+            f0_turn = self.face_turn_wrt_edge(de[0], edge)
+            f1_turn = self.face_turn_wrt_edge(de[1], edge)
+            f0_turn = f0_turn or -f1_turn
+            f1_turn = f1_turn or -f0_turn
+
+            rotate=f1_turn
+
+
+            # rotate = self.faces[face]['turn']
+            #
+            # if face==de[0]: #
+            #     rotate = -self.faces[face]['turn']
+            # elif face==de[1]:
+            #     rotate = self.faces[face]['turn']
+            # else:
+            #     assert False
+            # if (edge_turn==0):
+            #     rotate=-rotate
             de_edges_by_dir[edge[2]].append((edge, rotate))
 
         for dir,edges in enumerate(de_edges_by_dir):
@@ -412,8 +422,9 @@ class connect_assessor_c:
             # expansions=[]
 
                 def process_item(item):
-                    nonlocal self
                     edge, suggested_turn = item
+                    if edge in self.dagp_edges or back_edge(edge) in self.dagp_edges:
+                        return
                     tup, next_arc, arc_back, sum_of_turns, cycle_found, *_ = [None] * 10
                     for edge_turn in [suggested_turn, -suggested_turn]:
                         outer_turn = self.edges_to_skip.get(edge)
@@ -573,8 +584,6 @@ class connect_assessor_c:
             face = listget(0,self.e2face.get(edge))
             if not face: continue
             de = edge2dual.get(edge)
-            rotate = self.face_turn_wrt_edge(face,edge)
-
             f0_turn = self.face_turn_wrt_edge(de[0], edge)
             f1_turn = self.face_turn_wrt_edge(de[1], edge)
             f0_turn = f0_turn or -f1_turn
@@ -599,9 +608,9 @@ class connect_assessor_c:
         for arc_edge, junction in next_arc:
             if not arc_face:
                 arc_face = arc_edge  # face labeled after the edge that formed it
-                self.faces[arc_face] = {'edges': {arc_edge: 1}, 'turn': face_turn}
+                self.faces[arc_face] = {'edges': {arc_edge: face_turn}, 'turn': face_turn}
             else:
-                self.faces[arc_face]['edges'][arc_edge] = 1
+                self.faces[arc_face]['edges'][arc_edge] = face_turn
             self.e2face.setdefault(arc_edge, [None, None])[0] = arc_face
 
         assert arc_face
@@ -617,29 +626,36 @@ class connect_assessor_c:
             if bool(fw_face) and bool(bw_face):
                 assert False
             if not fw_face and not bw_face:
-                for path_edge in (arc_edge, back_edge(arc_edge)):
-                    if self.dagp_edges.get(path_edge) == 0:  # edges of the main path treated as new edges of the cycle
-                        self.faces[arc_face]['edges'][path_edge] = 1
-                        # self.faces[arc_face].setdefault('initial', path_edge)
-                        self.e2face.setdefault(path_edge, [None, None])[0] = arc_face
+                for edge in (arc_edge, back_edge(arc_edge)):
+                    edge_turn = self.dagp_edges.get(edge)  # edges of the main path treated as new edges of the cycle
+                    if edge_turn==0: # path edge
+                        self.faces[arc_face]['edges'][edge] = (
+                                face_turn if edge==arc_edge else -face_turn
+                        )
+                        if arc_face!='outer':
+                            assert edge!=arc_edge # path edges are always backwards
+                        # self.faces[arc_face].setdefault('initial', edge)
+                        self.e2face.setdefault(edge, [None, None])[0] = arc_face
                         break
-                else:
-                    self.faces[arc_face]['edges'][arc_edge] = 1
-                    # self.faces[arc_face].setdefault('initial', arc_edge)
-                    self.e2face.setdefault(arc_edge, [None, None])[0] = arc_face
-
+                    elif edge_turn!=None: # that is the edge exists
+                        self.faces[arc_face]['edges'][edge] = (
+                            face_turn if edge==arc_edge else -face_turn
+                        )
+                        # self.faces[arc_face].setdefault('initial', arc_edge)
+                        self.e2face.setdefault(arc_edge, [None, None])[0] = arc_face
+                        break
                 continue
             de_edge = None
             if fw_face:
                 # peer_faces[fw_face] = 'from' if face_turn == RIGHT else 'to'
                 de_edge = (fw_face, arc_face, arc_edge) if face_turn == RIGHT else (arc_face, fw_face, arc_edge)
-                self.faces[arc_face]['edges'][arc_edge] = 1
+                self.faces[arc_face]['edges'][arc_edge] = face_turn
                 self.e2face.setdefault(arc_edge, [None,None])[1] = arc_face
             elif bw_face:
                 # peer_faces[bw_face] = 'from' if face_turn == LEFT else 'to'
                 de_edge = (bw_face, arc_face, back_edge(arc_edge)) if face_turn == LEFT else (
                 arc_face, bw_face, back_edge(arc_edge))
-                self.faces[arc_face]['edges'][back_edge(arc_edge)] = 1
+                self.faces[arc_face]['edges'][back_edge(arc_edge)] = -face_turn
                 self.e2face.setdefault(back_edge(arc_edge), [None, None])[1] = arc_face
 
             assert de_edge
@@ -662,6 +678,9 @@ class connect_assessor_c:
 
 
     def face_turn_wrt_edge(self,face,edge):
+        return self.faces[face]['edges'][edge]
+
+    def face_turn_wrt_edge_old(self,face,edge):
         if face=='outer':
             faces= self.e2face.get(edge)
             if not faces:
@@ -678,7 +697,15 @@ class connect_assessor_c:
 
     # add missed faces: the outer face and faces created by a chord
     def check_missed_faces(self):
-        for edge,edge_turn in self.dagp_edges.items():
+        items=[]
+        for edge, edge_turn in self.dagp_edges.items():
+            faces = self.e2face.get(edge)
+            if not faces:
+                items.append((edge,edge_turn)) # late
+            else:
+                items.insert(0,(edge,edge_turn)) # early
+
+        for edge,edge_turn in items:
             faces=self.e2face.get(edge)
             if not faces: # bridge edge - outer face on both sides
                 # sanity check - a bridge can't make a cycle
@@ -693,7 +720,7 @@ class connect_assessor_c:
                 if not face in self.faces:
                     self.add_face(face, [], [(edge,None)], 0)
                 self.e2face[edge]=[face,face]
-                self.faces[face]['edges'][edge]=1
+                self.faces[face]['edges'][edge]=0 # no turn for bridge edge
                 de_edge = (face, face, edge)
                 self.dual_edges[de_edge]=1
                 continue
@@ -964,7 +991,7 @@ class connect_assessor_c:
             if node==end_node:
                 path=[]
                 while edge:
-                    path.append(edge)
+                    path.insert(0,edge)
                     edge = tree.get(edge[:2])
                 yield path
                 continue
