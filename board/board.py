@@ -1,9 +1,20 @@
 import copy 
 from random import randrange,randint
 import collections
-from .board_graph import Board_graph
-from attrdict import AttrDict
+import bisect
+from sortedcontainers import SortedListWithKey
 
+from .utils import ddot,dpos,ddir
+from .board_graph import Board_graph
+from .connect_assess import connect_assessor_c
+
+
+'''
+what can be done:
+1. placing at adj free cells
+2. -- (4, 5) to (4, 3): 0.000000 - should not be (max_edge_cut not big enough ?)
+3. should have assessed (0,5 - 4,5) candidate first
+'''
 
 
 class Board:
@@ -16,20 +27,28 @@ class Board:
     _scrap_length=None
     _scraps=[]
     _bg=Board_graph()
-    _assessment=None
+    current_move = None
+    _assessment=None # ddot(moves=list(), move_map=dict(), candidates=SortedListWithKey(key=lambda cand: cand.move_in_out))
+    _axes= None
 
 
     # axes: x - left, y - up, directions enumerated anti-clockwise
     _dirs = [
-            [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1], [0,-1], [1,-1]
-        ]
+        [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]
+    ]
 
-    def init(self, size=9, batch=5, colsize=None, _scrap_length=5):
+    _straight_dirs=[]
+    for dir in _dirs:
+        if dir[0] and dir[1]:
+            continue
+        _straight_dirs.append(ddot(dx=dir[0],dy=dir[1]))
+
+    def __init__(self, size=9, batch=5, colsize=None, scrap_length=5, axes=None):
         if colsize==None:
             colsize=len(self._colors)
         self._size=size
         self._batch=batch
-        self._scrap_length=_scrap_length
+        self._scrap_length=scrap_length
         self._colsize=colsize
         self._sides=[[0,None], [None,0], [self._size-1,None], [None,self._size-1]]
         self._array = [
@@ -37,6 +56,8 @@ class Board:
                 for j in range(0,self._size)
         ]
         self._color_list=collections.defaultdict(dict)
+        self._axes = axes
+        self._bg=Board_graph(self._axes)
         self.update_buffer()
         self.reset_assessment()
         self._bg.update_graph(self)
@@ -49,9 +70,16 @@ class Board:
         return self._size
 
     def reset_assessment(self):
-        self._assessment=AttrDict(
-            move_in=None, move_out=None, move_in_out=None
-        )
+        self._assessment=ddot(moves=list()
+                              , move_map=dict()
+                              , candidates=list()
+                              , cand_colors=SortedListWithKey(key=lambda color: color.move_in_out)
+                              )
+            # ddot(
+            # move_map=dict()
+            # , candidates=list()
+            # , move_in=None, move_out=None, move_in_out=None
+        # )
 
     def get_cell(self,x,y):
         return self._array[x][y]
@@ -103,6 +131,8 @@ class Board:
         line.append(self.get_segment_items(x,y,dx,dy,length))
         return line
 
+
+    # returns x,y and length of a board's chord for given dx,dy
     def get_starts(self,dx,dy):
         starts=None
         if dx==0:
@@ -146,50 +176,159 @@ class Board:
 
 
     def candidate(self,x,y,dx,dy,items):
-        colors = dict()
-        free=dict()
-        total_colors=0
+        cand = ddot(colors=dict(),free=dict(),poses=dict(), ball_count=0, move_in_out=0
+                    , index=None, rank=None, moves=dict())
+        # colors = dict()
+        # colors = AttrDict(color=AttrDict(pos=list(),count=0))
+        # free=dict()
+        # ball_count=0
         for i in range(len(items)):
             color,cx,cy=items[i]
+            cand.poses[dpos(cx,cy)]=color
             if color!=None:
-                colors.setdefault(color,{'pos':(cx,cy),'count':0})['count']+=1
-                total_colors+=1
+                cand.colors.setdefault(color, ddot(pos=list(),name=color,count=0,cand=cand, moves=dict()))
+                cand.colors[color].pos.append(ddot(i=i, pos=dpos(cx,cy)))
+                cand.colors[color].count+=1
+                cand.ball_count+=1
             else:
-                free[(cx,cy)]={'lc':self._bg.metrics['lc'][(cx,cy)]}
-        return colors,free,total_colors
+                cand.free[dpos(cx,cy)]={'lc':self._bg.metrics['lc'][(cx,cy)]}
+
+        cand_colors = []
+        for i_color, color in cand.colors.items():
+            color.move_in_out = len(cand.free) + (cand.ball_count - color.count)
+            cand_colors.append(color)
+
+        return cand,cand_colors
 
 
     def candidates(self):
+        A=self._assessment
         lines = self.get_chords()
         best_cand=None
         for line in lines:
             x,y,dx,dy,length,items=line
             for i in range(0, length-self._scrap_length+1):
-                cand= self.candidate(x,y,dx,dy,items[i:i+self._scrap_length])
-                self.assess(cand)
-
-    # def assess_placement(self,color,x,y):
-    #     positions = self._color_list[color]
-    #     for cx,cy in positions:
-    #         self._bg.find_path(())
+                cand,colors = self.candidate(x,y,dx,dy,items[i:i+self._scrap_length])
+                # cand.index=len(self._cand_array)
+                A.candidates.append(cand)
+                for color in colors:
+                    A.cand_colors.add(color)
 
 
+    def color_assessment(self):
+        counter=0
+        for color in self._assessment.cand_colors:
+            self.assess(color)
+            counter+=1
+            if counter>20:
+                break
 
-    def assess(self,cand):
-        colors,free,total_colors = cand
-        A=self.assessment
 
-        for color,data in colors.items():
-            move_out=(total_colors-data['count'])
-            move_in = free + move_out
-            move_in_out=move_out+move_in
-            if A.move_in_out ==None:
-                pass # TODO: impl
-            if A.move_in_out < move_in_out:
+    def find_best_move(self):
+        self.reset_assessment()
+        self.candidates()
+        self.color_assessment()
+        return self.pick_best_move()
+
+    def pick_best_move(self):
+        A=self._assessment
+        best_move=None
+        for cand in A.candidates:
+            for move in cand.moves:
+                best_move= move
+                break
+        else:
+            return None
+
+        return move,cand
+
+
+    def assess(self,color):
+        A=self._assessment
+        self.assess_color_placement(color)
+
+    def add_move_candidate(self, move, color):
+        A=self._assessment
+        move_key = (move.pos_from, move.pos_to)
+        if move_key in A.move_map:
+            return
+
+        cut_prob = self.assess_move(move)
+        move.cut_prob=cut_prob
+        A.move_map[move_key] = move
+        color.moves[move_key] = move
+
+    def assess_color_placement(self, color):
+
+        # A=self._assessment
+        counter=0
+        if color.cand.free:
+            for free_pos, metric in color.cand.free.items():
+                color_cells = self.get_cells_by_color(color.name)
+                for pos in color_cells:
+                    if pos in color.cand.poses:
+                        continue
+                    move = ddot(pos_from=pos, pos_to=free_pos, color=color)
+                    self.add_move_candidate(move, color)
+                    counter+=1
+                    if counter>3:
+                        break
+                else:
+                    continue
+                break
+
+
+    # might be not necessary
+    def assess_cand_placement(self, cand):
+
+        # A=self._assessment
+        if cand.free:
+            scolors=sorted(cand.colors.items(), key=lambda i:i[1].count, reverse=True)
+            for i_color, color in scolors:
+                for free_pos, metric in cand.free.items():
+                    color_cells = self.get_cells_by_color(i_color)
+                    for pos in color_cells:
+                        if pos in cand.poses:
+                            continue
+                        move = ddot(pos_from=pos, pos_to=free_pos, color=color)
+                        self.add_move_candidate(move, cand)
+
+    def assess_move(self, move:ddot):
+        # adj_cells= self.free_adj_cells(start_pos)
+        # for cell in adj_cells:
+        #     start_node = cell.x
+
+        start_node=(move.pos_from.x, move.pos_from.y)
+        end_node=(move.pos_to.x, move.pos_to.y)
+        adj_free = self.free_adj_cells(move.pos_from)
+        start_edges= [ (start_node, tuple(adj) ) for adj in adj_free]
+        ca = self._bg.assess_connection_wo_node(start_node, end_node, start_edges, max_cut=3)
+        ass = ca.cut_probability()
+        print ("%s to %s: %f" % (start_node, end_node, ass))
+        return ass
+
+    def new_pos(self, pos:dpos, dir:ddir):
+        d=dpos(pos.x+dir.dx, pos.y+dir.dy)
+        if self.check_pos(d):
+            return d
+        return None
+
+    def check_pos(self, pos:dpos):
+        if pos.x<0 or pos.y<0 or pos.x>=self._size or pos.y>=self._size:
+            return False
+        return True
+
+    def free_adj_cells(self, start_pos):
+        cells=[]
+        for dir in self._straight_dirs:
+            npos:dpos = self.new_pos(start_pos, dir)
+            if not npos:
                 continue
-            if A.move_in_out==move_in_out:
-                self.assess_placement()
-
+            color = self.cell(npos)
+            if color:
+                continue
+            cells.append(npos)
+        return cells
 
 
     def candidates_(self):
@@ -217,20 +356,61 @@ class Board:
         return msg
 
     def next_move(self):
-        picked= self.get_random_free_cells()
-        self.place(picked)
+        if self.current_move:
+            self.make_move(self.current_move)
+        self.picked= self.get_random_free_cells()
+        self.place(self.picked)
+        self.last_balls= self.picked_balls(self.picked)
         self._bg.update_graph(self)
-        self.last_balls= self.picked_balls(picked)
-        return picked
+        self.current_move = self.find_best_move()
+        return self.picked
+
+    def draw(self, show=False):
+        self._bg.init_drawing(self._axes)
+        self._bg.draw()
+        if show:
+            self._bg.show()
+
+    def draw_move(self):
+        self._bg.init_drawing(self._axes)
+        self._bg.draw()
+        if not self.current_move:
+            f=t=None
+        else:
+            move,cand=self.current_move
+            f=move.pos_from
+            t=move.to_pos
+        self._bg.draw_move(self, f,t)
+        self._bg.show()
+
+    def get_cells_by_color(self,color):
+        return self._color_list[color]
 
     def place(self,picked):
         for item in picked:
             (x,y,color)=item
             self._array[x][y]=color
-            self._color_list[color][(x,y)]=1
+            self._color_list.setdefault(color,dict())[dpos(x,y)]=1
             # self.color_lists[color]
         self.update_graph()
         self.update_buffer()
+
+    def make_move(self,move,cand):
+        f=move.pos_from
+        t=move.pos_to
+        path = self._bg.check_path((f.x,f.y),(t.x,t.y))
+        if not path:
+            raise("no path")
+
+        assert self._array[f.x][f.y] == move.color
+        assert self._array[t.x][t.y]==None
+        self._array[f.x][f.y]=None
+        self._array[t.x][t.y]=move.color
+        self.check_scraps(move.pos_to)
+
+        self.update_graph()
+        self.update_buffer()
+
 
     def update_graph(self):
         self._bg.update_graph(self)
@@ -244,14 +424,14 @@ class Board:
     #         rows.append("  ".join([ '.' if x ==' ' else x for x in self._buffer[i]]))
     #     self.view = "\n".join(rows)
 
-    def cell(self,i,j):
-        return self._array[i][j]
+    def cell(self,pos:dpos):
+        return self._array[pos.x][pos.y]
 
     def get_free_cells(self):
         free=[]
         for i in range(0,self._size):
             for j in range(0,self._size):
-                if (self.cell(i,j)==None):
+                if (self.cell(ddot(x=i,y=j))==None):
                     free.append([i,j,self._colors[randrange(self._colsize)]])
         return free
 
@@ -299,7 +479,7 @@ class Board:
                 scraps.append(scrap)
         return scraps
 
-    def check_scraps(self):
+    def check_scraps(self,pos):
         # scrap_cells=[]
         self.scraps=[]
         for i in range(0,self._size):

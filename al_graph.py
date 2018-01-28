@@ -9,8 +9,7 @@ from board.board import Board
 
 def main():
     # import pdb; pdb.set_trace()
-    board = Board()
-    board.init(9,5,None,5)
+    board = None
     random.seed(0)
     free_cells =0 
 
@@ -26,14 +25,19 @@ def main():
     #     return G   
 
     def draw():
-        board._bg.draw_paths(main_ax)
+        board.draw_move()
+
 
     def draw2():
         board._bg.draw(main_ax)
 
     def start():
+        nonlocal board
         # G=make_graph()
-        draw()
+        board= Board(size=9,batch=5,colsize=None,scrap_length=5,axes=main_ax)
+        # board.draw(show=False)
+        picked=next_move()
+        # draw()
 
     
     def next_move():
@@ -67,13 +71,14 @@ def main():
         # G=make_graph()
         draw()
 
-    plt.figure(1,figsize=(6,6))
+    figure = plt.figure(1,figsize=(6,6))
     main_ax = plt.subplot(111)
     # main_ax= plt.gca()
 
     plt.connect('button_press_event', on_click)
 
     axcut = plt.axes([0.9, 0.5, 0.1, 0.075])
+    figure.tight_layout()
     bcut = Button(axcut, 'YES', color='red', hovercolor='green')
     bcut.on_clicked(_exit)
     

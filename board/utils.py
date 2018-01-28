@@ -97,3 +97,33 @@ class _GetchWindows:
 
 getch = _Getch()
 
+class ddot(dict):
+    def __init__(self, *args, **kwargs):
+        super(ddot, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+    @classmethod
+    def recursive_walk(cls, d):
+        self = cls(d)
+        for key, value in self.items():
+            if type(value) is dict:
+                self[key] = cls.recursive_walk(value)
+        return self
+
+class dpos(ddot):
+    def __init__(self, x, y):
+        super().__init__(x=x,y=y)
+    def __hash__(self):
+        return (self.x,self.y).__hash__()
+    def __iter__(self):
+        yield self.x
+        yield self.y
+
+
+class ddir(ddot):
+    def __init__(self, x, y):
+        super().__init__(dx=x,dy=y)
+    def __hash__(self):
+        return (self.dx,self.dy).__hash__()
+
+

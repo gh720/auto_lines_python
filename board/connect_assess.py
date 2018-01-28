@@ -10,6 +10,9 @@ from attrdict import AttrDict
 import pprint
 from pprint import pprint as pp
 import itertools
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import bisect
 import re
 
 
@@ -55,12 +58,10 @@ def back_edge(edge):
     return (edge[1], edge[0], (edge[2] + 2) % len(DIRS))
 
 class connect_assessor_c:
-
-
     start_node=None
     end_node=None
     cycle_sets=AttrDict()
-    debug_edge = ((2, 7), (1, 7), 3)
+    debug_edge = ((5, 7), (4, 7), 3)
     debug_edges = [debug_edge, back_edge(debug_edge)]
     debug_face = ((4, 4), (3, 4), 3)
     debug_face2 = ((None), (None), 1)
@@ -71,9 +72,12 @@ class connect_assessor_c:
     edges_to_skip=dict()
     cycles_skipping=[]
 
-    def __init__(self,G):
+    def __init__(self,G,posG=None,occG=None,axes=None):
+        self.axes=axes
+        self.posG=posG
         self.G=G
-        self.faceG=nx.DiGraph()
+        self.occG=occG
+        self.DAG=nx.DiGraph()
 
     def assess_connection(self,start,end):
         self.path = nx.shortest_path(start,end)
@@ -128,8 +132,13 @@ class connect_assessor_c:
         _ = nx.draw_networkx_labels(G, pos=pos, labels=labels, font_color='k', font_size=8)
         plt.show(block=block)
 
-    def _sp(self,block=False):
-        import matplotlib.pyplot as plt
+    def _sp(self,axes=False, block=False):
+        # import matplotlib.pyplot as plt
+        if axes == True:
+            axes=self.axes
+        pp("axes:" + str(axes))
+        if axes:
+            plt.sca(axes)
 
         dags_by_dir =[x[:] for x in [[]] * 4]
         for edge in self.dagp_edges:
@@ -144,8 +153,13 @@ class connect_assessor_c:
         # FFG=G.copy()
         DFG=G.copy().to_directed()
         # nx.set_edge_attributes(DFG,1,'capacity')
-        plt.figure(1,figsize=(6,6))
-        nx.draw(G, pos=gna(G,'pos'))
+        plt.figure(1,figsize=(7,7))
+        # plt.subplot(111)
+        nx.draw_networkx(G, pos=gna(self.posG,'pos'), node_shape='s', node_size=50, with_labels=False)
+        if self.occG:
+            nx.draw_networkx(self.occG, pos=gna(self.posG,'pos'), node_shape='o'
+                    , node_color=[ mpl.colors.cnames[y] for x,y in gna(self.occG,'color').items()]
+                    , node_size=500, with_labels=False)
         #gh = nx.gomory_hu_tree(FFG)
         #uno_cycles = nx.cycle_basis(FFG)
         #pprint(uno_cycles)
@@ -158,30 +172,8 @@ class connect_assessor_c:
         # me = nx.maximal_matching(FFG)
         
         # nx.set_edge_attributes(DFG)
-        for dir,dagp in enumerate(dags_by_dir):
-            dag_trunk = [ edge for edge in dagp if self.dagp_edges[edge]==0 ]
-            dag_right = [ edge for edge in dagp if self.dagp_edges[edge]==RIGHT ]
-            dag_left = [ edge  for edge in dagp if self.dagp_edges[edge]==LEFT ]
 
-            nx.draw_networkx_edges(DFG,pos=gna(G,'pos'), edgelist=self.dagp_edges.keys(), edge_color='b', width=3)
-            # nx.draw_networkx_edges(DFG,pos=gna(G,'pos'), edgelist=dag_left, edge_color='b', width=3)
-            TG=DFG.edge_subgraph(self.ge(dag_trunk)).copy()
-            LG=DFG.edge_subgraph(self.ge(dag_left)).copy()
-            RG=DFG.edge_subgraph(self.ge(dag_right)).copy()
-
-            # nx.draw_networkx_edges(DFG,pos=gna(G,'pos'), edgelist=me, edge_color='g', width=2)
-            trunk_labels={ (edge[0],edge[1]): self.order.get(edge,'') for edge in dag_trunk }
-            left_labels={ (edge[0],edge[1]): self.order.get(edge,'') for edge in dag_left }
-            right_labels={ (edge[0],edge[1]): self.order.get(edge,'') for edge in dag_right }
-        # pp(gna(G,'pos').items() )
-            trunk_pos= gna(G,'pos')#{ n:self.right_up(pos,dir) for n,pos in gna(G,'pos').items() }
-            left_pos={ n:self.right_up(pos,dir) for n,pos in gna(G,'pos').items() }
-            right_pos ={ n:self.right_down(pos,dir) for n,pos in gna(G,'pos').items() }
-            # print(left_pos)
-            _=nx.draw_networkx_edge_labels(TG,pos=trunk_pos , label_pos=0.3, edge_labels=trunk_labels, font_color='k')
-            _=nx.draw_networkx_edge_labels(LG,pos=left_pos , label_pos=0.3, edge_labels=left_labels, font_color='lime')
-            _=nx.draw_networkx_edge_labels(RG,pos=right_pos , label_pos=0.3, edge_labels=right_labels, font_color='r')
-
+        # return
         face_starting_edges=[]
         for face in self.faces:
             edge = self.initial_edge(face)
@@ -190,10 +182,6 @@ class connect_assessor_c:
         # face_starting_edges = [ (self.e2fac, 'lime' if self.faces[face]['turn']==LEFT else 'r' )
         #                             for face in self.faces
         #                                 if face!=self.outer_face and not re.match('^skipped',str(face))]
-        nx.draw_networkx_edges(DFG,pos=gna(G,'pos')
-                               , edgelist=[ v[0] for v in face_starting_edges ]
-                               , edge_color=[ v[1] for v in face_starting_edges ]
-                               , width=2.0)
         # de_parents=dict()
         # de_children=dict()
         edge2dual={ de[2]:de for de in self.dual_edges }
@@ -211,6 +199,8 @@ class connect_assessor_c:
             if not face: continue
 
             de=edge2dual.get(edge)
+            if not de:
+                continue
 
             f0_turn = self.face_turn_wrt_edge(de[0], edge)
             f1_turn = self.face_turn_wrt_edge(de[1], edge)
@@ -219,17 +209,6 @@ class connect_assessor_c:
 
             rotate=f1_turn
 
-
-            # rotate = self.faces[face]['turn']
-            #
-            # if face==de[0]: #
-            #     rotate = -self.faces[face]['turn']
-            # elif face==de[1]:
-            #     rotate = self.faces[face]['turn']
-            # else:
-            #     assert False
-            # if (edge_turn==0):
-            #     rotate=-rotate
             de_edges_by_dir[edge[2]].append((edge, rotate))
 
         for dir,edges in enumerate(de_edges_by_dir):
@@ -245,44 +224,45 @@ class connect_assessor_c:
         # pp(gna(G,'pos').items() )
             left_pos={ n:self.right_up(pos,dir) for n,pos in gna(G,'pos').items() }
             right_pos ={ n:self.right_down(pos,dir) for n,pos in gna(G,'pos').items() }
-            # print(left_pos)
-            _=nx.draw_networkx_edge_labels(DLG,pos=left_pos , label_pos=0.5, edge_labels=left_labels, font_size=12, font_color='lime')
-            _=nx.draw_networkx_edge_labels(DRG,pos=right_pos , label_pos=0.5, edge_labels=right_labels, font_size=12, font_color='r')
+            # _=nx.draw_networkx_edge_labels(DLG,pos=left_pos , label_pos=0.5, edge_labels=left_labels, font_size=8, font_color='lime')
+            # _=nx.draw_networkx_edge_labels(DRG,pos=right_pos , label_pos=0.5, edge_labels=right_labels, font_size=8, font_color='r')
+
+        nx.draw_networkx_edges(DFG,pos=gna(G,'pos')
+                               , edgelist=[ v[0] for v in face_starting_edges ]
+                               , edge_color=[ v[1] for v in face_starting_edges ]
+                               , width=2.0)
+
+
+
+        for dir,dagp in enumerate(dags_by_dir):
+            dag_trunk = [ edge for edge in dagp if self.dagp_edges[edge]==0 ]
+            dag_right = [ edge for edge in dagp if self.dagp_edges[edge]==RIGHT ]
+            dag_left = [ edge  for edge in dagp if self.dagp_edges[edge]==LEFT ]
+
+            TG = DFG.edge_subgraph(self.ge(dag_trunk)).copy()
+            LG = DFG.edge_subgraph(self.ge(dag_left)).copy()
+            RG = DFG.edge_subgraph(self.ge(dag_right)).copy()
+
+            # nx.draw_networkx_edges(DFG,pos=gna(G,'pos'), edgelist=me, edge_color='g', width=2)
+            trunk_labels = {(edge[0], edge[1]): self.order.get(edge, '') for edge in dag_trunk}
+            left_labels = {(edge[0], edge[1]): self.order.get(edge, '') for edge in dag_left}
+            right_labels = {(edge[0], edge[1]): self.order.get(edge, '') for edge in dag_right}
+            # pp(gna(G,'pos').items() )
+            trunk_pos = gna(G, 'pos')  # { n:self.right_up(pos,dir) for n,pos in gna(G,'pos').items() }
+            left_pos = {n: self.right_up(pos, dir) for n, pos in gna(G, 'pos').items()}
+            right_pos = {n: self.right_down(pos, dir) for n, pos in gna(G, 'pos').items()}
+            _ = nx.draw_networkx_edge_labels(TG, pos=trunk_pos, label_pos=0.3, font_size=8, edge_labels=trunk_labels, font_color='k')
+            # _ = nx.draw_networkx_edge_labels(LG, pos=left_pos, label_pos=0.3, edge_labels=left_labels,
+            #                                  font_color='lime')
+            # _ = nx.draw_networkx_edge_labels(RG, pos=right_pos, label_pos=0.3, edge_labels=right_labels, font_color='r')
+
+            nx.draw_networkx_edges(DFG,pos=gna(G,'pos'), edgelist=self.dagp_edges.keys(), edge_color='b', width=3)
+            # nx.draw_networkx_edges(DFG,pos=gna(G,'pos'), edgelist=dag_left, edge_color='b', width=3)
+
 
 
         plt.show(block=block)
 
-    def compute_path_cuts(self):
-        des = copy.copy(self.dual_edges)
-        cutoffs=[]
-        adj_faces=dict()
-        for path_edge in self.path_edge_dict:
-            faces =self.e2face.get(path_edge)
-            if not faces:
-                assert False
-            if faces[0]==None or faces[1]==None:
-                assert False
-
-            f0_turn=self.face_turn_wrt_edge(faces[0],path_edge)
-            f1_turn=self.face_turn_wrt_edge(faces[1],path_edge)
-            f0_turn=f0_turn or -f1_turn
-            f1_turn=f1_turn or -f0_turn
-
-
-            fde=(faces[0],faces[1], path_edge)
-            left_face = faces[0]
-            right_face = faces[1]
-            if f0_turn == RIGHT: # cycle with right turn is on the edge's right
-                left_face = faces[1]
-                right_face = faces[0]
-            adj_faces[(left_face,right_face)]=1
-
-        for left_face,right_face in adj_faces:
-            cutoff_list = list(self.dfs_find_all_paths_dual_graph((left_face, right_face, None), left_face))
-            for cutoff in cutoff_list:
-                cutoffs.append(cutoff)
-        self.cutoffs = cutoffs
-        return cutoffs
 
     def cycle_check(self,start_node):
         node_state=dict() # encoutered=1,completed=2
@@ -336,28 +316,31 @@ class connect_assessor_c:
         self.update_reachability(node)
 
 
-    def cycles_along_path(self, start_path):
+    def cycles_along_path(self, start_path, max_node_cut=None):
         arc_junctions=self.arc_junctions=dict()
-        start =start_path[0]
-        path_dict = self.path_dict = self.get_nodes_dict(start_path)
-        path_edge_dict = self.path_edge_dict= self.get_edges_dict(start_path)
-        dagp=self.dagp = defaultdict(list)
-        dagp_rev=self.dagp_rev=defaultdict(list)
-        dagp_edges=self.dagp_edges=dict()
+        # start =start_path[0]
+        self.start_node=start_path[0]
+        self.end_node=start_path[-1]
+        self.max_node_cut=max_node_cut
+        self.path_dict = self.get_nodes_dict(start_path)
+        self.path_edge_dict= self.get_edges_dict(start_path)
+        self.dagp = defaultdict(list)
+        self.dagp_rev=defaultdict(list)
+        self.dagp_edges=dict()
         trunk_join=self.trunk_join=dict()
-        order = self.order=dict()
+        self.order=dict()
         self.reachable_parents=dict()
         self.reachable_children=dict()
         counter=self.counter=0
-        e2face=self.e2face=dict()
-        faces=self.faces=dict()
-        dual_edges=self.dual_edges=dict()
-        outer_cycle= self.outer_cycle=[]
-        outer_edges= self.outer_edges=dict()
+        self.e2face=dict()
+        self.faces=dict()
+        self.dual_edges=dict()
+        self.outer_cycle=[]
+        self.outer_edges=dict()
 
         trunk_turn =0
 
-        dagp[start_path[-1]]=[]
+        self.dagp[start_path[-1]]=[]
         expansion = ([],trunk_turn,dict())
         for node_i,node in enumerate(start_path):
             parent = None if node_i==0 else start_path[node_i-1]
@@ -511,36 +494,35 @@ class connect_assessor_c:
                     item = scheduled.popleft()
                     process_item(item)
 
-        for item_i in range(len(scheduled_late)):
-            process_item(scheduled_late[item_i])
+        while scheduled_late:
+            next_try=copy.copy(scheduled_late)
+            scheduled_late=[]
+            for item_i in range(len(next_try)-1,-1,-1):
+                process_item(next_try[item_i])
+            if len(next_try)<=len(scheduled_late):
+                # self._sp()
+                # assert False
+                break
+
+        self.make_nx_dag()
 
         self.check_missed_faces()
-
-        # def process_outer_cycle():  # redundant with add_face
-        #     if not self.outer_cycle:
-        #         self.compute_outer_cycle()
-        #     for arc_edge,junction in self.outer_cycle:
-        #         de_edge=None
-        #         for peer_edge in (arc_edge,back_edge(arc_edge)):
-        #             peer_face = listget(0,e2face.get(peer_edge))
-        #             if not peer_face:
-        #                 continue
-        #             face_turn = self.faces[peer_face]['turn']
-        #             if self.dagp_edges.get(peer_edge)==0:
-        #                 face_turn=-face_turn
-        #             de_edge = (self.outer_face, peer_face, peer_edge) if face_turn == RIGHT else (peer_face, self.outer_face, peer_edge)
-        #             self.faces.setdefault(self.outer_face, {'edges': dict(), 'turn': LEFT})['edges'][peer_edge] = 1
-        #             break
-        #         assert de_edge
-        #         dual_edges[de_edge] = 1
-        # process_outer_cycle()
 
         if not self.create_dual_graph():
             assert False
 
         self.compute_path_cuts()
+        self.compute_node_cuts()
 
         return
+
+######### DAG
+
+    def make_nx_dag(self):
+        self.DAG=nx.DiGraph()
+        self.DAG.add_edges_from([
+            (edge[0],edge[1]) for edge in self.dagp_edges
+        ])
 
     def get_edge_w_dir(self,edge):
         return (edge[0],edge[1], direction(edge[0],edge[1]))
@@ -548,118 +530,6 @@ class connect_assessor_c:
     def get_edge(self,edge):
         return (edge[0], edge[1])
 
-    def cutoff_check(self, cutoff_edges, G=None):
-        if not self.cutoffs:
-            raise("cutoffs not computed")
-        TG = G or self.G.copy()
-        edges = [ self.get_edge(edge) for edge in cutoff_edges ]
-        backup_edges=[ (*edge,  G.edges[edge]) for edge in edges ] if G else None
-        TG.remove_edges_from(edges)
-        path_found=True
-        try:
-            path =nx.shortest_path(TG,self.start_node,self.end_node)
-        except nx.NetworkXNoPath:
-            path_found=False
-        if backup_edges:
-            TG.add_edges_from(backup_edges)
-        return path_found
-
-
-
-    def enum_cutoffs(self):
-        gens=[]
-        for dual_paths in self.cutoffs:
-            planar_arrays = [ edge[2] for edge in dual_paths ]
-            gens.append(itertools.product(*planar_arrays))
-        gen_all = itertools.chain(*gens)
-        return gen_all
-
-    def create_dual_graph(self):
-        edge2dual = {de[2]: de for de in self.dual_edges}
-        self.dualG = nx.MultiDiGraph()
-        for edge in self.dual_edges:
-            self.dualG.add_edge(edge[0],edge[1], planar_edge= edge[2])
-
-        for edge, edge_turn in self.dagp_edges.items():
-            face = listget(0,self.e2face.get(edge))
-            if not face: continue
-            de = edge2dual.get(edge)
-            f0_turn = self.face_turn_wrt_edge(de[0], edge)
-            f1_turn = self.face_turn_wrt_edge(de[1], edge)
-            f0_turn = f0_turn or -f1_turn
-            f1_turn = f1_turn or -f0_turn
-
-            rotate=f1_turn
-
-            if rotate!=RIGHT:
-                if f0_turn==0 and f1_turn==0 and de[0]=='outer' and de[1]=='outer':
-                    return True
-                return False
-        return True
-
-    def initial_edge(self,face):
-        edges=self.faces[face]['edges']
-        for edge in edges:
-            if self.e2face.get(edge,[None,None])[0]==face:
-                return edge
-        return None
-
-    def add_face(self,arc_face,next_arc,arc_back,face_turn):
-        for arc_edge, junction in next_arc:
-            if not arc_face:
-                arc_face = arc_edge  # face labeled after the edge that formed it
-                self.faces[arc_face] = {'edges': {arc_edge: face_turn}, 'turn': face_turn}
-            else:
-                self.faces[arc_face]['edges'][arc_edge] = face_turn
-            self.e2face.setdefault(arc_edge, [None, None])[0] = arc_face
-
-        assert arc_face
-        # if arc_face=='outer' and  arc_face in self.faces:
-        #     debug=1
-
-        if arc_face not in self.faces:  # sanity check
-            self.faces[arc_face] = {'edges': dict(), 'turn': face_turn}
-
-        for arc_edge, junction in arc_back:
-            fw_face = listget(0, self.e2face.get(arc_edge))
-            bw_face = listget(0, self.e2face.get(back_edge(arc_edge)))
-            if bool(fw_face) and bool(bw_face):
-                assert False
-            if not fw_face and not bw_face:
-                for edge in (arc_edge, back_edge(arc_edge)):
-                    edge_turn = self.dagp_edges.get(edge)  # edges of the main path treated as new edges of the cycle
-                    if edge_turn==0: # path edge
-                        self.faces[arc_face]['edges'][edge] = (
-                                face_turn if edge==arc_edge else -face_turn
-                        )
-                        if arc_face!='outer':
-                            assert edge!=arc_edge # path edges are always backwards
-                        # self.faces[arc_face].setdefault('initial', edge)
-                        self.e2face.setdefault(edge, [None, None])[0] = arc_face
-                        break
-                    elif edge_turn!=None: # that is the edge exists
-                        self.faces[arc_face]['edges'][edge] = (
-                            face_turn if edge==arc_edge else -face_turn
-                        )
-                        # self.faces[arc_face].setdefault('initial', arc_edge)
-                        self.e2face.setdefault(arc_edge, [None, None])[0] = arc_face
-                        break
-                continue
-            de_edge = None
-            if fw_face:
-                # peer_faces[fw_face] = 'from' if face_turn == RIGHT else 'to'
-                de_edge = (fw_face, arc_face, arc_edge) if face_turn == RIGHT else (arc_face, fw_face, arc_edge)
-                self.faces[arc_face]['edges'][arc_edge] = face_turn
-                self.e2face.setdefault(arc_edge, [None,None])[1] = arc_face
-            elif bw_face:
-                # peer_faces[bw_face] = 'from' if face_turn == LEFT else 'to'
-                de_edge = (bw_face, arc_face, back_edge(arc_edge)) if face_turn == LEFT else (
-                arc_face, bw_face, back_edge(arc_edge))
-                self.faces[arc_face]['edges'][back_edge(arc_edge)] = -face_turn
-                self.e2face.setdefault(back_edge(arc_edge), [None, None])[1] = arc_face
-
-            assert de_edge
-            self.dual_edges[de_edge] = 1
 
 
     def add_edges_to_skip(self, cycle, turn):
@@ -670,109 +540,6 @@ class connect_assessor_c:
                 self.edges_to_skip[outer_edge] = turn
                 self.edges_to_skip[back_edge(outer_edge)] = -turn
 
-    # def add_face(self, face, cycle, turn):
-    #     self.outer_cycle=cycle
-    #     for outer_edge, junction in self.outer_cycle:
-    #         self.outer_edges[outer_edge] = turn
-    #         self.outer_edges[back_edge(outer_edge)] = -turn
-
-
-    def face_turn_wrt_edge(self,face,edge):
-        return self.faces[face]['edges'][edge]
-
-    def face_turn_wrt_edge_old(self,face,edge):
-        if face=='outer':
-            faces= self.e2face.get(edge)
-            if not faces:
-                return 0
-            assert faces[1] =='outer'
-            if faces[0] == 'outer':
-                return 0
-            turn = -self.faces[faces[0]]['turn'] # opposite of adjacent face turn
-        else:
-            turn = self.faces[face]['turn']
-        if edge in self.path_edge_dict: # path edges backwards
-            turn =-turn
-        return turn
-
-    # add missed faces: the outer face and faces created by a chord
-    def check_missed_faces(self):
-        items=[]
-        for edge, edge_turn in self.dagp_edges.items():
-            faces = self.e2face.get(edge)
-            if not faces:
-                items.append((edge,edge_turn)) # late
-            else:
-                items.insert(0,(edge,edge_turn)) # early
-
-        for edge,edge_turn in items:
-            faces=self.e2face.get(edge)
-            if not faces: # bridge edge - outer face on both sides
-                # sanity check - a bridge can't make a cycle
-                for turn in LEFT,RIGHT:
-                    cycle=self.dfs_walk_turning_back(edge, edge[0], turn)
-                    if cycle:
-                        assert False
-                if edge[0] not in self.path_dict or edge[1] not in self.path_dict:
-                    assert False
-                # face=self.next_face_name('bridge_cut_')
-                face='outer'
-                if not face in self.faces:
-                    self.add_face(face, [], [(edge,None)], 0)
-                self.e2face[edge]=[face,face]
-                self.faces[face]['edges'][edge]=0 # no turn for bridge edge
-                de_edge = (face, face, edge)
-                self.dual_edges[de_edge]=1
-                continue
-            if len(faces)!=2:
-                assert False
-            if bool(faces[0])!=bool(faces[1]):
-                peer_face=faces[0] or faces[1]
-                # should_be_outer=True if peer_face==faces[0] else False
-                face_turn_wrt_edge=self.face_turn_wrt_edge(peer_face,edge)
-                opposite_turn = -face_turn_wrt_edge
-                rev_cycle = self.dfs_walk_turning_back(edge, edge[0], opposite_turn)
-                assert rev_cycle
-                cycle = list(reversed(rev_cycle))
-                if not cycle[0][0][0] == cycle[-1][0][1]:
-                    assert False
-                sum_of_turns=self.sum_of_turns(cycle)
-                real_turn = LEFT if sum_of_turns < 0 else RIGHT
-                if (face_turn_wrt_edge==real_turn): # outer face
-                    # if not should_be_outer:
-                    #     assert False
-                    self.add_face('outer', [], cycle, opposite_turn) # because outer face
-                else: # inner face
-                    # if should_be_outer:
-                    #     assert False
-                    face = self.next_face_name()
-                    self.add_face(face, [], cycle, real_turn) # because inner face
-
-    #
-    # def compute_outer_cycle(self):
-    #     for edge,edge_turn in self.dagp_edges.items():
-    #         faces=self.e2face[edge]
-    #         if not faces:
-    #             continue
-    #         if len(faces)>2:
-    #             assert False
-    #         internal_faces=[]
-    #         for face in faces:
-    #             if face!=self.outer_face:
-    #                 internal_faces+=[face]
-    #         if len(internal_faces)!=1: # two internal faces
-    #             continue
-    #         turn = -self.faces[internal_faces[0]]['turn']
-    #
-    #         if edge_turn==0:
-    #             turn=-turn
-    #         rev_cycle = self.dfs_walk_back(edge, edge[0], turn)
-    #         cycle = list(reversed(rev_cycle))
-    #         assert cycle
-    #         if not cycle[0][0][0]==cycle[-1][0][1]:
-    #             assert False
-    #         self.add_outer_cycle(cycle,turn)
-    #         break
 
     def balanced_turn(self, junctions, fw, bw):
         assert fw!=None
@@ -971,15 +738,329 @@ class connect_assessor_c:
         sum_of_turns=-self.sum_of_turns(arc_back+arc)
         return (list(reversed(arc)), list(reversed(arc_back)), sum_of_turns)
 
-    def dfs_find_all_paths_dual_graph(self, start_edge, end_node):
+######### faces
+
+    def create_dual_graph(self):
+        edge2dual = {de[2]: de for de in self.dual_edges}
+        self.dualG = nx.MultiDiGraph()
+        for edge in self.dual_edges:
+            self.dualG.add_edge(edge[0],edge[1], planar_edge= edge[2])
+
+        for edge, edge_turn in self.dagp_edges.items():
+            face = listget(0,self.e2face.get(edge))
+            if not face: continue
+            de = edge2dual.get(edge)
+            f0_turn = self.face_turn_wrt_edge(de[0], edge)
+            f1_turn = self.face_turn_wrt_edge(de[1], edge)
+            f0_turn = f0_turn or -f1_turn
+            f1_turn = f1_turn or -f0_turn
+
+            rotate=f1_turn
+
+            if rotate!=RIGHT:
+                if f0_turn==0 and f1_turn==0 and de[0]=='outer' and de[1]=='outer':
+                    return True
+                return False
+        return True
+
+    def initial_edge(self,face):
+        edges=self.faces[face]['edges']
+        for edge in edges:
+            if self.e2face.get(edge,[None,None])[0]==face:
+                return edge
+        return None
+
+    def add_face(self,arc_face,next_arc,arc_back,face_turn):
+        for arc_edge, junction in next_arc:
+            if not arc_face:
+                arc_face = arc_edge  # face labeled after the edge that formed it
+                self.faces[arc_face] = {'edges': {arc_edge: face_turn}, 'turn': face_turn}
+            else:
+                self.faces[arc_face]['edges'][arc_edge] = face_turn
+            self.e2face.setdefault(arc_edge, [None, None])[0] = arc_face
+
+        assert arc_face
+        # if arc_face=='outer' and  arc_face in self.faces:
+        #     debug=1
+
+        if arc_face not in self.faces:  # sanity check
+            self.faces[arc_face] = {'edges': dict(), 'turn': face_turn}
+
+        for arc_edge, junction in arc_back:
+            fw_face = listget(0, self.e2face.get(arc_edge))
+            bw_face = listget(0, self.e2face.get(back_edge(arc_edge)))
+            if bool(fw_face) and bool(bw_face):
+                assert False
+            if not fw_face and not bw_face:
+                for edge in (arc_edge, back_edge(arc_edge)):
+                    edge_turn = self.dagp_edges.get(edge)  # edges of the main path treated as new edges of the cycle
+                    if edge_turn==0: # path edge
+                        self.faces[arc_face]['edges'][edge] = (
+                                face_turn if edge==arc_edge else -face_turn
+                        )
+                        if arc_face!='outer':
+                            assert edge!=arc_edge # path edges are always backwards
+                        # self.faces[arc_face].setdefault('initial', edge)
+                        self.e2face.setdefault(edge, [None, None])[0] = arc_face
+                        break
+                    elif edge_turn!=None: # that is the edge exists
+                        self.faces[arc_face]['edges'][edge] = (
+                            face_turn if edge==arc_edge else -face_turn
+                        )
+                        # self.faces[arc_face].setdefault('initial', arc_edge)
+                        self.e2face.setdefault(arc_edge, [None, None])[0] = arc_face
+                        break
+                continue
+            de_edge = None
+            if fw_face:
+                # peer_faces[fw_face] = 'from' if face_turn == RIGHT else 'to'
+                de_edge = (fw_face, arc_face, arc_edge) if face_turn == RIGHT else (arc_face, fw_face, arc_edge)
+                self.faces[arc_face]['edges'][arc_edge] = face_turn
+                self.e2face.setdefault(arc_edge, [None,None])[1] = arc_face
+            elif bw_face:
+                # peer_faces[bw_face] = 'from' if face_turn == LEFT else 'to'
+                de_edge = (bw_face, arc_face, back_edge(arc_edge)) if face_turn == LEFT else (
+                arc_face, bw_face, back_edge(arc_edge))
+                self.faces[arc_face]['edges'][back_edge(arc_edge)] = -face_turn
+                self.e2face.setdefault(back_edge(arc_edge), [None, None])[1] = arc_face
+
+            assert de_edge
+            self.dual_edges[de_edge] = 1
+
+
+
+    def face_turn_wrt_edge(self,face,edge):
+        return self.faces[face]['edges'][edge]
+
+    def face_turn_wrt_edge_old(self,face,edge):
+        if face=='outer':
+            faces= self.e2face.get(edge)
+            if not faces:
+                return 0
+            assert faces[1] =='outer'
+            if faces[0] == 'outer':
+                return 0
+            turn = -self.faces[faces[0]]['turn'] # opposite of adjacent face turn
+        else:
+            turn = self.faces[face]['turn']
+        if edge in self.path_edge_dict: # path edges backwards
+            turn =-turn
+        return turn
+
+    # add missed faces: the outer face and faces created by a chord
+    def check_missed_faces(self):
+        items=[]
+        for edge, edge_turn in self.dagp_edges.items():
+            faces = self.e2face.get(edge)
+            if not faces:
+                items.append((edge,edge_turn)) # late
+            else:
+                items.insert(0,(edge,edge_turn)) # early
+
+        for edge,edge_turn in items:
+            faces=self.e2face.get(edge)
+            if not faces: # bridge edge - outer face on both sides
+                # sanity check - a bridge can't make a cycle
+                for turn in LEFT,RIGHT:
+                    cycle=self.dfs_walk_turning_back(edge, edge[0], turn)
+                    if cycle:
+                        assert False
+                if edge[0] not in self.path_dict or edge[1] not in self.path_dict:
+                    assert False
+                # face=self.next_face_name('bridge_cut_')
+                face='outer'
+                if not face in self.faces:
+                    self.add_face(face, [], [(edge,None)], 0)
+                self.e2face[edge]=[face,face]
+                self.faces[face]['edges'][edge]=0 # no turn for bridge edge
+                de_edge = (face, face, edge)
+                self.dual_edges[de_edge]=1
+                continue
+            if len(faces)!=2:
+                assert False
+            if bool(faces[0])!=bool(faces[1]):
+                peer_face=faces[0] or faces[1]
+                # should_be_outer=True if peer_face==faces[0] else False
+                face_turn_wrt_edge=self.face_turn_wrt_edge(peer_face,edge)
+                opposite_turn = -face_turn_wrt_edge
+                rev_cycle = self.dfs_walk_turning_back(edge, edge[0], opposite_turn)
+                assert rev_cycle
+                cycle = list(reversed(rev_cycle))
+                if not cycle[0][0][0] == cycle[-1][0][1]:
+                    assert False
+                sum_of_turns=self.sum_of_turns(cycle)
+                real_turn = LEFT if sum_of_turns < 0 else RIGHT
+                if (face_turn_wrt_edge==real_turn): # outer face
+                    # if not should_be_outer:
+                    #     assert False
+                    self.add_face('outer', [], cycle, opposite_turn) # because outer face
+                else: # inner face
+                    # if should_be_outer:
+                    #     assert False
+                    face = self.next_face_name()
+                    self.add_face(face, [], cycle, real_turn) # because inner face
+
+
+######### cutoffs
+
+    def compute_path_cuts(self):
+        des = copy.copy(self.dual_edges)
+        cutoffs=[]
+        adj_faces=dict()
+        for path_edge in self.path_edge_dict:
+            faces =self.e2face.get(path_edge)
+            if not faces:
+                assert False
+            if faces[0]==None or faces[1]==None:
+                assert False
+
+            f0_turn=self.face_turn_wrt_edge(faces[0],path_edge)
+            f1_turn=self.face_turn_wrt_edge(faces[1],path_edge)
+            f0_turn=f0_turn or -f1_turn
+            f1_turn=f1_turn or -f0_turn
+
+
+            fde=(faces[0],faces[1], path_edge)
+            left_face = faces[0]
+            right_face = faces[1]
+            if f0_turn == RIGHT: # cycle with right turn is on the edge's right
+                left_face = faces[1]
+                right_face = faces[0]
+            adj_faces[(left_face,right_face)]=1
+
+        for left_face,right_face in adj_faces:
+            cutoff_list = list(self.dfs_find_all_paths_dual_graph(
+                (left_face, right_face, None), left_face, self.max_node_cut
+            ))
+            for cutoff in cutoff_list:
+                cutoffs.append(cutoff)
+        self.cutoffs = cutoffs
+        return cutoffs
+
+    def enum_cutoffs(self):
+        gens=[]
+        for dual_paths in self.cutoffs:
+            planar_arrays = [ edge[2] for edge in dual_paths ]
+            gens.append(itertools.product(*planar_arrays))
+        gen_all = itertools.chain(*gens)
+        return gen_all
+
+    def enum_node_cutoffs(self):
+        return self.node_cutoffs
+
+    def compute_node_cuts(self, max_node_cut=None):
+        self.node_cutoffs=[]
+        nodesets=dict()
+        counter=0
+        for cutoff_edges in self.enum_cutoffs():
+            for nodes in self.node_cutoff(cutoff_edges):
+                if nodesets.setdefault(nodes,counter)==counter:
+                    self.node_cutoffs.append(nodes)
+                    counter+=1
+        return self.node_cutoffs
+
+    def node_cutoff(self,cutoff_edges):
+        node_edges=dict()
+        for edge in cutoff_edges:
+            node_edges.setdefault(edge[0],dict())[edge]=1
+            node_edges.setdefault(edge[1],dict())[edge]=1
+
+        node_cuts=[]
+
+        queue=deque([(None,[],cutoff_edges)])
+        while queue:
+            node,nodes,edges=queue.popleft()
+            if node==self.start_node:
+                continue
+            if node:
+                nodes=nodes[:]
+                bisect.insort_right(nodes,node)
+                edges=[edge for edge in edges if not edge in node_edges[node]]
+                if not edges:
+                    node_cuts.append(tuple(nodes))
+                    continue
+            for edge in edges:
+                queue.append((edge[0], nodes, edges))
+                queue.append((edge[1], nodes, edges))
+        return node_cuts
+                
+    def node_cutoff_(self,cutoff_edges):
+        pairs =  [ ((e[0], e[1]), (e[1], e[0])) for e in [self.get_edge(edge) for edge in cutoff_edges] ]
+        for vec in itertools.product(*pairs):
+            nodes = []
+            nodes0 = dict()
+            nodes1 = dict()
+            for edge in vec:
+                if self.start_node==edge[0]:
+                    break  # start_node cannot be removed
+                nodes0.setdefault(edge[0],dict())[edge[1]]=1
+
+                # if edge[0] in nodes0:
+                #     continue
+                if edge[0] in nodes1:
+                    break # redundant combination : ((1,0),(0,0))... ((0,0),(0,1))
+                elif edge[1] in nodes0:
+                    continue # edge already broken : ((0,0),(0,1)) ... ((1,0),(0,0))
+                nodes0.add(edge[0])
+                nodes1.add(edge[1])
+                nodes.append(edge[0])
+            else:
+                yield list(nodes)
+
+
+    def cutoff_check(self, cutoff_edges, G=None):
+        if not self.cutoffs:
+            raise("cutoffs not computed")
+        TG = G or self.DAG.copy()
+        edges = [ self.get_edge(edge) for edge in cutoff_edges ]
+        backup_edges=[ (*edge,  G.edges[edge]) for edge in edges ] if G else None
+        TG.remove_edges_from(edges)
+        path_found=True
+        try:
+            path =nx.shortest_path(TG,self.start_node,self.end_node)
+        except nx.NetworkXNoPath:
+            path_found=False
+        if backup_edges:
+            TG.add_edges_from(backup_edges)
+        return not path_found # true == cutoff worked
+
+    
+
+    def cut_probability(self, removals=3):
+        cut_count=[0]*removals
+        for cutoff in self.enum_node_cutoffs():
+            if len(cutoff) > removals:
+                continue
+            cut_count[len(cutoff)-1]+=1
+        prob=0
+        prob_rest=1
+        combinations=1
+        rem_combinations=1
+        for i in range(len(cut_count)):
+            combinations*=(len(self.DAG.nodes)-i)
+            rem_combinations*=(i+1)
+            _prob =  cut_count[i]/combinations/rem_combinations
+            prob+=_prob
+            prob_rest-=_prob
+            if not (prob >=0 and prob < 1):
+                assert False
+            if not prob + prob_rest==1:
+                assert False
+        return prob
+
+    
+    def dfs_find_all_paths_dual_graph(self, start_edge, end_node, max_node_cut):
         edges = self.dual_neighbors_edges(start_edge[0], [ start_edge[1] ] )
         planars = next(edges)[2]
         start_edge=(start_edge[0], start_edge[1], planars)
         queue = deque([(start_edge,dict())])
         tree = dict()
         seen_nodes=dict()
+        max_edge_cut= max_node_cut*1 # STUB: appropriate ratio to be determined
         while queue:
             edge,path_dict = queue.pop()
+            if max_node_cut and len(path_dict) >= max_node_cut:
+                continue
             parent, node, _ = edge
             if node in path_dict:
                 continue

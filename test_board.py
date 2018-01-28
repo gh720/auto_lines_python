@@ -1,6 +1,6 @@
 import unittest
 from pprint import pprint
-from board import Board
+from board.board import Board
 import random
 
 @unittest.skip('')

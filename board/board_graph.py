@@ -7,8 +7,11 @@ from matplotlib.widgets import Button
 from collections import deque,defaultdict
 from attrdict import AttrDict
 
+
 from pprint import pprint
 from .connect_assess import connect_assessor_c
+
+from .utils import *
 
 # def _init():
 #     random.seed(0)
@@ -53,8 +56,14 @@ def throw_dice(nodeset,n):
 
 class Board_graph:
 
+    axes=None
+
+    def __init__(self, axes=None):
+        self.axes=axes
+
     G = None
     metrics=dict()
+    axes=None
 
     # def make_graph(board):
     #     a = board.get_array()
@@ -67,6 +76,16 @@ class Board_graph:
     #             attrs[(i,j)]=data
     #     nx.set_node_attributes(G,attrs)
     #     return G   
+
+    def init_drawing(self,axes):
+        self.axes=axes
+        plt.sca(axes)
+        plt.cla()
+
+    def show(self,axes=None,block=None):
+        plt.sca(axes or self.axes)
+        plt.show(block=block)
+
 
     def update_graph(self,board): # TODO: decouple
         a = board.get_array()
@@ -99,12 +118,12 @@ class Board_graph:
         # APG=FG.subgraph(ap).copy()
         return self.metrics
 
-    def draw(self,axes,chained=False):
+    def draw(self,chained=False):
         G,FG,OG = self.G,self.FG,self.OG # FIND: go about inappropriate calls
-        if not chained:
-            plt.sca(axes)
-            plt.cla()
-            # plt.figure(1,figsize=(8,8))
+        # if not chained:
+        #     plt.sca(axes)
+        #     plt.cla()
+        plt.sca(self.axes)
 
 
         # OG = G.subgraph([ x for x,data in G.nodes.items() if data['occupied']!=None] ).copy()
@@ -114,7 +133,7 @@ class Board_graph:
         # ap=nx.articulation_points(FG)
         # APG=FG.subgraph(ap).copy()
 
-        text={ (x,y):(x,y+.3) for x,y in gna(G,'pos') };
+        # text={ (x,y):(x,y+.3) for x,y in gna(G,'pos') };
 
         
         nx.draw_networkx(FG,pos=gna(G,'pos')
@@ -124,13 +143,51 @@ class Board_graph:
             , node_color=[ mpl.colors.cnames[y] for x,y in gna(OG,'color').items()] )
         # nx.draw_networkx_edges(TG, gna(TG,'pos'), sp_edges, width=3.0, edge_color='r', arrow_style='>')
         # nx.draw_networkx_nodes(APG, pos=gna(FG,'pos'), node_shape='d', node_color='r', node_size=300)
-        nx.draw_networkx_labels(G, pos=text, labels={ (x,y):str((x,y)) for x,y in gna(G,'pos') })
-        if not chained:
-            plt.show()
+        # nx.draw_networkx_labels(G, pos=text, labels={ (x,y):str((x,y)) for x,y in gna(G,'pos') })
+        # if not chained:
+        #     plt.show()
 
-    
 
-    def draw_paths(self,axes,chained=False):
+    def draw_move(self, board, f:ddot, t:tuple, chained=False):
+        if not f:
+            return False
+        try:
+            path=nx.shortest_path(self.G, f, t)
+        except nx.NetworkXNoPath:
+            return False
+        # parents = self.all_paths(start, end)
+        # edges = set()
+        # for child, child_parents in parents.items():
+        #     for parent in child_parents:
+        #         edges.add((parent, child))
+
+        # edges_traceback = [(x, y) for x, y in self.get_paths_edges(parents, end) if x != None]
+        edges=[]
+        for i,node in enumerate(path):
+            if i<len(path)-1:
+                edges.append((node,path[i+1]))
+
+        TG = self.G.edge_subgraph(edges)
+        # g_path = nx.DiGraph()
+        # g_path.add_nodes_from(TG)
+        #
+        # g_path_traceback = g_path.copy()
+        #
+        # g_path.add_edges_from(edges)
+        # g_path_traceback.add_edges_from(edges_traceback)
+
+        # if not chained:
+        #     plt.sca(axes)
+        #     plt.cla()
+        self.draw(chained=True)
+        plt.sca(self.axes)
+        nx.draw_networkx_edges(TG, gna(self.G, 'pos'), width=2, edge_color='cyan')
+        # nx.draw_networkx_edges(g_path_traceback, gna(self.G, 'pos'), width=1, edge_color='red')
+        # if not chained:
+        #     plt.show()
+        return True
+
+    def draw_paths_(self,axes,chained=False):
         start = (0,0)
         end = (5,8)
         parents = self.all_paths(start,end)
@@ -149,16 +206,16 @@ class Board_graph:
         g_path.add_edges_from(edges)
         g_path_traceback.add_edges_from(edges_traceback)
 
-        if not chained:
-            plt.sca(axes)
-            plt.cla()
-            
+        # if not chained:
+        #     plt.sca(axes)
+        #     plt.cla()
+        #
 
         self.draw(axes,chained=True)
         nx.draw_networkx_edges(g_path, gna(self.G,'pos'), width=2, edge_color='cyan')
         nx.draw_networkx_edges(g_path_traceback, gna(self.G,'pos'), width=1, edge_color='red')
-        if not chained:
-            plt.show()
+        # if not chained:
+        #     plt.show()
 
     def assess_paths(self,start,end):
         FG=self.FG
@@ -538,14 +595,29 @@ class Board_graph:
 
 
     @staticmethod
-    def assess_connection(G, start, end):
+    def assess_connection(G, start, end, max_cut=None):
         ca = connect_assessor_c(G)
         path = nx.shortest_path(G, start,end)
-        ca.cycles_along_path(path)
+        ca.cycles_along_path(path, max_cut)
         return ca
 
+    def assess_connection_wo_node(self, start, end, edges, max_cut=None):
+        TG=self.FG.copy()
+        node_data=self.G.nodes[start]
+        TG.add_node(start, **node_data)
+        TG.add_edges_from(edges)
+        ca = connect_assessor_c(TG, self.G, self.OG, self.axes)
+        path = nx.shortest_path(TG, start,end)
+        ca.cycles_along_path(path, max_cut)
+        return ca
 
-
+    def check_path(G, start:tuple, end:tuple):
+        try:
+            path=nx.shortest_path()
+            return path
+        except nx.NetworkXNoPath:
+            pass
+        return None
 
     # def bfs(g, start):
     #     queue, enqueued = deque([(None, start)]), set([start])
