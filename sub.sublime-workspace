@@ -4,6 +4,310 @@
 		"selected_items":
 		[
 			[
+				"b",
+				"b64ps2"
+			],
+			[
+				"rig",
+				"right_labels"
+			],
+			[
+				"arc",
+				"arc_junctions"
+			],
+			[
+				"dagp",
+				"dagp_edges"
+			],
+			[
+				"conne",
+				"connect_assessor_c"
+			],
+			[
+				"set",
+				"setdefault"
+			],
+			[
+				"last",
+				"last_junction"
+			],
+			[
+				"trun",
+				"trunk_leave_index"
+			],
+			[
+				"nei",
+				"nei_edge"
+			],
+			[
+				"back",
+				"back_edge_turn"
+			],
+			[
+				"edge",
+				"edge_turn"
+			],
+			[
+				"edg",
+				"edge_turn"
+			],
+			[
+				"neis",
+				"neis_avl"
+			],
+			[
+				"nex",
+				"next_path"
+			],
+			[
+				"cu",
+				"current_path"
+			],
+			[
+				"nextne",
+				"next_neis"
+			],
+			[
+				"cut",
+				"cut_off_index"
+			],
+			[
+				"nexte",
+				"next_node"
+			],
+			[
+				"truk",
+				"trunk_join_node"
+			],
+			[
+				"out",
+				"outer_join_counter"
+			],
+			[
+				"outer",
+				"outer_start_counter"
+			],
+			[
+				"inc",
+				"inc_dir_back"
+			],
+			[
+				"D",
+				"DICT"
+			],
+			[
+				"prev",
+				"prev_dir"
+			],
+			[
+				"get",
+				"get_neighbours"
+			],
+			[
+				"junc",
+				"junctions"
+			],
+			[
+				"ne",
+				"nei_on_cycle"
+			],
+			[
+				"prev_",
+				"prev_node"
+			],
+			[
+				"buil",
+				"build_cycle"
+			],
+			[
+				"a",
+				"AttrDict"
+			],
+			[
+				"ci",
+				"cy_i"
+			],
+			[
+				"cyc",
+				"cycle_sets"
+			],
+			[
+				"cn_i",
+				"cn_i_next"
+			],
+			[
+				"nod",
+				"node_map"
+			],
+			[
+				"next",
+				"next_node"
+			],
+			[
+				"cyce",
+				"cycles"
+			],
+			[
+				"cy",
+				"cy_indexes"
+			],
+			[
+				"no",
+				"node_map"
+			],
+			[
+				"sta",
+				"staticmethod"
+			],
+			[
+				"get_cyc",
+				"get_cycle_sets"
+			],
+			[
+				"seg",
+				"segments"
+			],
+			[
+				"segme",
+				"segment"
+			],
+			[
+				"cycl",
+				"cycle_sets"
+			],
+			[
+				"miny",
+				"miny_for_minx"
+			],
+			[
+				"min",
+				"miny_for_minx"
+			],
+			[
+				"st",
+				"staticmethod"
+			],
+			[
+				"new",
+				"new_cycles"
+			],
+			[
+				"node",
+				"node_count"
+			],
+			[
+				"add",
+				"add_cutsets"
+			],
+			[
+				"pat",
+				"patches"
+			],
+			[
+				"sho",
+				"shortest_path"
+			],
+			[
+				"pp",
+				"pprint"
+			],
+			[
+				"g_p",
+				"g_path_traceback"
+			],
+			[
+				"p",
+				"parent"
+			],
+			[
+				"enquee",
+				"enqueued"
+			],
+			[
+				"_col",
+				"_color_list"
+			],
+			[
+				"mov",
+				"move_in_out"
+			],
+			[
+				"move_in",
+				"move_in_out"
+			],
+			[
+				"Boar",
+				"Board_graph"
+			],
+			[
+				"_scrap",
+				"_scrap_length"
+			],
+			[
+				"_sc",
+				"_scrap_length"
+			],
+			[
+				"get_se",
+				"get_segment_items"
+			],
+			[
+				"leng",
+				"length"
+			],
+			[
+				"dir",
+				"dir_index"
+			],
+			[
+				"scr",
+				"scrap_length"
+			],
+			[
+				"le",
+				"length"
+			],
+			[
+				"lines",
+				"lines_cand"
+			],
+			[
+				"main",
+				"main_ax"
+			],
+			[
+				"scra",
+				"scrap_cells"
+			],
+			[
+				"pre",
+				"prepare_view"
+			],
+			[
+				"draw",
+				"draw_scraps"
+			],
+			[
+				"dra",
+				"draw_scrap"
+			],
+			[
+				"sc",
+				"scraps"
+			],
+			[
+				"free",
+				"free_cells"
+			],
+			[
+				"picke",
+				"picked_msg"
+			],
+			[
+				"Col",
+				"COLORS"
+			],
+			[
 				"Cho",
 				"ChoiceInline"
 			],
@@ -210,77 +514,77 @@
 			[
 				"sor",
 				"sorted_maps"
-			],
-			[
-				"star",
-				"startUrl"
-			],
-			[
-				"sorte",
-				"sorted_ids"
-			],
-			[
-				"spli",
-				"split	( separator: string, limit: int ): string String"
-			],
-			[
-				"mat",
-				"match_sitemap"
-			],
-			[
-				"P",
-				"Popup"
-			],
-			[
-				"call",
-				"callback"
-			],
-			[
-				"with",
-				"with_active_tab"
-			],
-			[
-				"prop",
-				"prototype"
-			],
-			[
-				"prototy",
-				"prototype"
-			],
-			[
-				"proto",
-				"prototype"
-			],
-			[
-				"inpu",
-				"input_enc"
-			],
-			[
-				"htt",
-				"https_proxy"
-			],
-			[
-				"I",
-				"IV—й"
-			],
-			[
-				"Пер",
-				"Пермский"
-			],
-			[
-				"сте",
-				"стенки"
-			],
-			[
-				"измене",
-				"изменений"
 			]
 		]
 	},
 	"buffers":
 	[
+		{
+			"file": "board/board.py",
+			"settings":
+			{
+				"buffer_size": 22073,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "al_graph.py",
+			"settings":
+			{
+				"buffer_size": 2960,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "board/board_graph.py",
+			"settings":
+			{
+				"buffer_size": 20886,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "board/connect_assess.py",
+			"settings":
+			{
+				"buffer_size": 43253,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "scratch/s2.py",
+			"settings":
+			{
+				"buffer_size": 600,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "scratch/s3.py",
+			"settings":
+			{
+				"buffer_size": 871,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "/E/work/devel/python3/jupyter/notebooks/t2.py",
+			"settings":
+			{
+				"buffer_size": 5687,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "board/utils.py",
+			"settings":
+			{
+				"buffer_size": 2977,
+				"line_ending": "Windows"
+			}
+		}
 	],
-	"build_system": "",
+	"build_system": "Packages/Python/Python.sublime-build",
 	"build_system_choices":
 	[
 		[
@@ -298,15 +602,87 @@
 				"Packages/ModernPerl/ModernPerl.sublime-build",
 				""
 			]
+		],
+		[
+			[
+				[
+					"Packages/Python/Python.sublime-build",
+					""
+				],
+				[
+					"Packages/Python/Python.sublime-build",
+					"Syntax Check"
+				],
+				[
+					"Packages/Python/Python.sublime-build",
+					"Syntax Check"
+				],
+				[
+					"Packages/SublimeREPL/sublimerepl_build_system_hack.sublime-build",
+					""
+				]
+			],
+			[
+				"Packages/Python/Python.sublime-build",
+				"Syntax Check"
+			]
+		],
+		[
+			[
+				[
+					"Packages/Python/Python.sublime-build",
+					""
+				],
+				[
+					"Packages/Python/Python.sublime-build",
+					"Syntax Check"
+				],
+				[
+					"Packages/Python/Python.sublime-build",
+					"cmd"
+				],
+				[
+					"Packages/SublimeREPL/sublimerepl_build_system_hack.sublime-build",
+					""
+				]
+			],
+			[
+				"Packages/Python/Python.sublime-build",
+				""
+			]
+		],
+		[
+			[
+				[
+					"Packages/Python/Python.sublime-build",
+					""
+				],
+				[
+					"Packages/Python/Python.sublime-build",
+					"Syntax Check"
+				],
+				[
+					"Packages/SublimeREPL/sublimerepl_build_system_hack.sublime-build",
+					""
+				]
+			],
+			[
+				"Packages/Python/Python.sublime-build",
+				""
+			]
 		]
 	],
 	"build_varint": "",
 	"command_palette":
 	{
-		"height": 288.0,
-		"last_filter": "new",
+		"height": 392.0,
+		"last_filter": "",
 		"selected_items":
 		[
+			[
+				"disa",
+				"Package Control: Disable Package"
+			],
 			[
 				"new",
 				"File: New File Relative to Current View"
@@ -323,6 +699,11 @@
 		"height": 372.0,
 		"history":
 		[
+			"view.scope_name(view.sel()[0].begin())",
+			"asdf",
+			"sublime.log_commands(False)",
+			"sublime.log_commands(Fakse)",
+			"sublime.log_commands(True)",
 			"sublime.log_commands(False)",
 			"sublime.log_commands(True)",
 			"loccommands(true)"
@@ -337,8 +718,35 @@
 		"side_bar_visible": false,
 		"status_bar_visible": false
 	},
+	"expanded_folders":
+	[
+		"/E/work/devel/python3/projects",
+		"/E/work/devel/python3/projects/al",
+		"/E/work/devel/python3/projects/al/board"
+	],
 	"file_history":
 	[
+		"/E/work/devel/python3/projects/al/scratch/s4.py",
+		"/E/work/devel/python3/projects/al/scratch/s2.py",
+		"/E/work/devel/python3/jupyter/notebooks/t2.py",
+		"/E/work/devel/python3/projects/al/utils.py",
+		"/E/work/devel/python3/projects/al/connect_assess.py",
+		"/E/work/devel/python3/projects/al/board_graph.py",
+		"/E/work/devel/python3/projects/al/al_graph.py",
+		"/E/work/devel/python3/projects/al/board.py",
+		"/E/work/devel/python3/projects/al/scratch.py",
+		"/E/work/devel/python3/projects/al/test_board.py",
+		"/E/work/devel/python3/projects/al/sub.sublime-project",
+		"/E/work/devel/python3/projects/al/scratch/s1.py",
+		"/C/soft/devel/editor/sublime/Data/Packages/User/Preferences.sublime-settings",
+		"/C/soft/devel/editor/sublime/Data/Packages/Default/Preferences.sublime-settings",
+		"/E/work/github/devel/python/matplotlib/doc/disablessl.py",
+		"/E/work/devel/python3/jupyter/notebooks/bfs0.py",
+		"/C/soft/devel/editor/sublime/Data/Packages/User/Default (Windows).sublime-keymap",
+		"/E/work/devel/python3/jupyter/notebooks/test.py",
+		"/E/work/devel/python3/jupyter/notebooks/test.pl",
+		"/E/work/devel/python3/projects/al/al.py",
+		"/E/work/devel/python3/projects/al/solver.py",
 		"/E/work/health/gastro/incoming.txt",
 		"/E/work/devel/python3/tutorials/offic1/mysite/polls/urls.py",
 		"/E/work/devel/python3/tutorials/offic1/mysite/polls/apps.py",
@@ -350,7 +758,6 @@
 		"/E/work/devel/python3/tutorials/offic1/mysite/mysite/urls.py",
 		"/E/work/devel/python3/tutorials/proj4/productionready-django-api/conduit/conduit.urls",
 		"/E/work/devel/python3/tutorials/proj1/pj1/posts/templates/posts/index.html",
-		"/C/soft/devel/editor/sublime/Data/Packages/User/Default (Windows).sublime-keymap",
 		"/E/work/devel/python3/tutorials/proj1/pj1/posts/__init__.py",
 		"/E/work/devel/python3/tutorials/proj1/pj1/pj1/settings.py",
 		"/E/work/devel/python3/tutorials/proj1/pj1/posts/admin.py",
@@ -388,7 +795,6 @@
 		"/E/work/kmg/tools/delete_junk2.pl",
 		"/E/work/perm/rent/couchdb/test_measure.pl",
 		"/E/work/kmg/SOAP/query_graph_soap.pm",
-		"/C/soft/devel/editor/sublime/Data/Packages/Default/Preferences.sublime-settings",
 		"/C/soft/devel/editor/sublime/Data/Packages/Default/Default (Windows).sublime-keymap",
 		"/E/work/kmg/gather/query_graph.pm",
 		"/E/work/kmg/gather/gather.pl",
@@ -447,30 +853,11 @@
 		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/widget/WidgetConfig.java",
 		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/ui/Fragment_Overview.java",
 		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/widget/DashClock.java",
-		"/E/work/github/android/opensource_gplay/Pedometer/src/main/res/layout/widget.xml",
-		"/E/work/github/android/opensource_gplay/Pedometer/src/main/AndroidManifest.xml",
-		"/E/work/github/android/opensource_gplay/Pedometer/build.gradle",
-		"/E/work/github/android/opensource_gplay/Pedometer/proguard-project.txt",
-		"/E/work/github/android/opensource_gplay/Pedometer/README.md",
-		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/ui/Dialog_Split.java",
-		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/AppUpdatedReceiver.java",
-		"/E/vm/win7/share/opera/ext/sobnik/1.40_0/manifest.json",
-		"/E/vm/win7/share/opera/ext/sobnik/1.40_0/cmn.js",
-		"/E/vm/win7/share/opera/ext/sobnik/1.40_0/ui.js",
-		"/C/path/setop.pl",
-		"/E/vm/win7/share/opera/ext/sobnik/1.40_0/avito.js",
-		"/E/vm/win7/share/opera/ext/sobnik/1.40_0/marker.js",
-		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/util/Util.java",
-		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/widget/com.google.android.apps.dashclock.api.ExtensionData",
-		"/E/projects/perl/fulltext/ftdir/ftdir.pl",
-		"/E/work/devel/perl/cpan/sb/Search-Fulltext-1.03/lib/Search/Fulltext.pm",
-		"/E/work/github/android/opensource_gplay/Pedometer/src/main/res/drawable-hdpi/ic_launcher.png",
-		"/C/soft/devel/editor/sublime/Data/Packages/User/Preferences.sublime-settings",
-		"/E/work/github/android/opensource_gplay/Pedometer/gradlew.bat"
+		"/E/work/github/android/opensource_gplay/Pedometer/src/main/res/layout/widget.xml"
 	],
 	"find":
 	{
-		"height": 23.0
+		"height": 34.0
 	},
 	"find_in_files":
 	{
@@ -485,6 +872,118 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"print",
+			"self.dagp_edges",
+			"order",
+			"dag",
+			"dagp",
+			"G.nodes",
+			"entry",
+			"get_direction",
+			"add_to_da",
+			"assess_path",
+			".append",
+			"reverse",
+			"rever",
+			"reves",
+			"trunc_entry",
+			"trunk_entry",
+			"trunk_ent",
+			"trunk_join",
+			"dir_prev",
+			"add_to_dag",
+			"current_path",
+			"arc",
+			"path",
+			"trunk_start",
+			"trunk_join",
+			"add_to_dag",
+			"node",
+			"get_neighbours",
+			"DICT",
+			"cycle",
+			"build_cycle",
+			"branches",
+			"nei_on_cycle",
+			"_turn",
+			"setdefault",
+			"nei2shift",
+			"node",
+			"0",
+			"subproc",
+			"dir",
+			"i",
+			"next",
+			"node_map",
+			"cycle_sets.node_map",
+			"next",
+			"cycle_sets",
+			"defaul",
+			"e",
+			"dir",
+			"i_minx",
+			"undo",
+			"min",
+			"edge",
+			"side",
+			"seen",
+			"figu",
+			"parent,child",
+			"all_paths",
+			"pdb",
+			"show",
+			".color_l",
+			"color_li",
+			".color_l",
+			".array",
+			"array",
+			"board._size",
+			"draw",
+			"make_g",
+			"place",
+			"scrap_le",
+			"dirs",
+			"array",
+			"colsize",
+			"colors",
+			"color",
+			"col",
+			"colo",
+			"scrap_length",
+			"size",
+			"count",
+			"ctrl+shift+b",
+			"dir",
+			"lines_cand",
+			"len",
+			"lines_cand",
+			"pdb",
+			"\" \"",
+			"' '",
+			"next_mo",
+			"' '",
+			"draw",
+			".siz",
+			"prepa",
+			"COLORS",
+			"lc",
+			"bw_c",
+			"^#.*\\r?\\n",
+			"^\\s*\\r?\\n",
+			"slop",
+			"pdb",
+			"in sc",
+			"last_ba",
+			"randin",
+			"randint",
+			"get_rando",
+			"dra",
+			"random",
+			"array",
+			"cell",
+			"next_mo",
+			"add",
+			"COLO",
 			"router",
 			"карт",
 			"was_pu",
@@ -500,119 +999,7 @@
 			"static",
 			"public",
 			"logout",
-			"a letter",
-			"dlog",
-			"under",
-			"allowed",
-			"next step",
-			"fetch",
-			"regust",
-			"log",
-			"bcrypt",
-			"admin",
-			"logout",
-			"config",
-			"1234",
-			"julian",
-			"ldap",
-			"test1",
-			"main",
-			"tutorial",
-			"tutori",
-			"tutoa",
-			"msg",
-			"kmg",
-			"kmg_",
-			"$xmlt",
-			"e:",
-			"promise",
-			"focus",
-			"right",
-			"top",
-			"link_com",
-			"open_win",
-			"sending ",
-			"sending data to",
-			"wrong call arg",
-			"wrong call ar",
-			"wrong call",
-			"tab_urls",
-			"visite",
-			"first_time",
-			"add_bro",
-			"add",
-			"add_bro",
-			"return",
-			"first_time",
-			"$first_time",
-			"first_time",
-			"add_browser_data",
-			"link_comm",
-			"navigated",
-			"naviga",
-			"navigated",
-			"naviga",
-			"navigated",
-			"link_comm",
-			"get_node_in",
-			"change_pro",
-			"getBa",
-			"derive_data",
-			"query_storage",
-			"open_window",
-			"update_browser_action_icon",
-			"false",
-			"update_icon_if_present",
-			"get_node_info",
-			"listener",
-			"R",
-			"r",
-			"R",
-			"Math.",
-			"Math.sin",
-			"Math.PI",
-			"var",
-			"lon2",
-			"lat2",
-			"lon1",
-			"lat1",
-			"delete",
-			"edges",
-			"$start_id",
-			"get_filter",
-			"fold",
-			"expand",
-			"delete_junk",
-			"delete",
-			"sleep",
-			"60",
-			"poll",
-			"get_new_requests",
-			"$async_write_obj",
-			"packa",
-			"update_tab_action",
-			"type",
-			"on_tab_created",
-			"create_tab_action",
-			"type",
-			"store_spawn_info",
-			"spawned",
-			"timeout",
-			"store_spawn_info",
-			"spawned",
-			"chrome.tabs",
-			"spaw",
-			"spawn",
-			"open_new",
-			"function",
-			"open_new_tab",
-			"spawned",
-			"store_spawn_info",
-			"common_processSuccess",
-			"sendMessage",
-			"delayedSearch",
-			"recurse",
-			"match_colors"
+			"a letter"
 		],
 		"highlight": true,
 		"in_selection": false,
@@ -620,6 +1007,11 @@
 		"regex": false,
 		"replace_history":
 		[
+			"direction",
+			"get_neighbors",
+			"._array",
+			"_scrap_length",
+			"",
 			"  "
 		],
 		"reverse": false,
@@ -631,14 +1023,254 @@
 	"groups":
 	[
 		{
+			"selected": 4,
 			"sheets":
 			[
+				{
+					"buffer": 0,
+					"file": "board/board.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 22073,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "al_graph.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2960,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "board/board_graph.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 20886,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 5,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "board/connect_assess.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 43253,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"expand_region_settings": "{\"stack\": [{\"start\": 2372, \"end\": 2376}], \"hash\": \"4677537fe7bb247b61192c5178316af2\"}",
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 6,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "scratch/s2.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 600,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								479,
+								479
+							]
+						],
+						"settings":
+						{
+							"expand_region_settings": "{\"stack\": [{\"start\": 252, \"end\": 258}], \"hash\": \"ef1d340c0dae6a9ea5ffb678ccb0ef82\"}",
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 5,
+					"file": "scratch/s3.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 871,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								777,
+								777
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 6,
+					"file": "/E/work/devel/python3/jupyter/notebooks/t2.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 5687,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								15
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				},
+				{
+					"buffer": 7,
+					"file": "board/utils.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2977,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 243.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 7,
+					"type": "text"
+				}
 			]
 		}
 	],
 	"incremental_find":
 	{
-		"height": 23.0
+		"height": 34.0
 	},
 	"input":
 	{
@@ -669,7 +1301,7 @@
 	"menu_visible": true,
 	"output.exec":
 	{
-		"height": 100.0
+		"height": 341.0
 	},
 	"output.find_results":
 	{
@@ -679,7 +1311,7 @@
 	"project": "sub.sublime-project",
 	"replace":
 	{
-		"height": 42.0
+		"height": 62.0
 	},
 	"save_all_on_build": true,
 	"select_file":
@@ -688,6 +1320,10 @@
 		"last_filter": "",
 		"selected_items":
 		[
+			[
+				"scra",
+				"al\\scratch.py"
+			],
 			[
 				"adm",
 				"polls\\admin.py"
@@ -823,10 +1459,6 @@
 			[
 				"popu",
 				"popup.js"
-			],
-			[
-				"scra",
-				"scripts\\Scraper.js"
 			],
 			[
 				"sitema",

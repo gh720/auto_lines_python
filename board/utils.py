@@ -118,6 +118,9 @@ class dpos(ddot):
     def __iter__(self):
         yield self.x
         yield self.y
+    @classmethod
+    def fromdict(cls, dict):
+        return cls(dict['x'], dict['y'])
 
 
 class ddir(ddot):
@@ -125,5 +128,12 @@ class ddir(ddot):
         super().__init__(dx=x,dy=y)
     def __hash__(self):
         return (self.dx,self.dy).__hash__()
+    def __iter__(self):
+        yield self.dx
+        yield self.dy
+    @classmethod
+    def fromdict(cls, dict):
+        return cls(dict['dx'], dict['dy'])
+
 
 

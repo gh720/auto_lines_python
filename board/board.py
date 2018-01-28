@@ -1,8 +1,12 @@
 import copy 
+import random
 from random import randrange,randint
 import collections
 import bisect
 from sortedcontainers import SortedListWithKey
+import pickle
+import base64
+import itertools
 
 from .utils import ddot,dpos,ddir
 from .board_graph import Board_graph
@@ -14,25 +18,18 @@ what can be done:
 1. placing at adj free cells
 2. -- (4, 5) to (4, 3): 0.000000 - should not be (max_edge_cut not big enough ?)
 3. should have assessed (0,5 - 4,5) candidate first
+4. moving obstacles
+4.1 checking if moved obstacle can be a candidate
+5. checking overall connectivity
+6. priority among color sharing candidates
 '''
 
 
 class Board:
     # COLORS=['Y','B','P','G','C','R','M']
-    _array=[]
-    _size=None
     _colors="red green yellow blue purple cyan magenta".split(' ')
     _colsize=len(_colors)
-    _color_list=dict()
-    _scrub_length=None
-    _scrubs=[]
-    _bg=Board_graph()
-    current_move = None
-    _assessment=None # ddot(moves=list(), move_map=dict(), candidates=SortedListWithKey(key=lambda cand: cand.move_in_out))
-    _axes= None
 
-
-    # axes: x - left, y - up, directions enumerated anti-clockwise
     _dirs = [
         [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]
     ]
@@ -41,7 +38,24 @@ class Board:
     for dir in _dirs:
         if dir[0] and dir[1]:
             continue
-        _straight_dirs.append(ddot(dx=dir[0],dy=dir[1]))
+        _straight_dirs.append(ddir(dir[0],dir[1]))
+
+    _color_list = None
+    _array = None
+    _size = None
+    _scrub_length=None
+    _scrubs=None
+    _tentative_scrubs=None
+    _bg=None
+    _assessment=None
+    _axes= None
+
+    iteration = None
+    current_move = None
+
+    _history=list()
+
+    # axes: x - left, y - up, directions enumerated anti-clockwise
 
     def __init__(self, size=9, batch=5, colsize=None, scrub_length=5, axes=None):
         if colsize==None:
@@ -51,17 +65,26 @@ class Board:
         self._scrub_length=scrub_length
         self._colsize=colsize
         self._sides=[[0,None], [None,0], [self._size-1,None], [None,self._size-1]]
-        self._array = [
-            [None for i in range(0,self._size)]
-                for j in range(0,self._size)
-        ]
         self._color_list=collections.defaultdict(dict)
         self._axes = axes
-        self._bg=Board_graph(self._axes)
-        self.update_buffer()
-        self.reset_assessment()
+        # self.update_buffer()
+        self.reset()
         self._bg.update_graph(self)
         # self.prepare_view()
+
+    def reset(self):
+        # COLORS=['Y','B','P','G','C','R','M']
+        self._array = [
+            [None for i in range(0, self._size)]
+            for j in range(0, self._size)
+        ]
+        self._color_list = dict()
+        self._scrubs = []
+        self._bg = Board_graph(self._axes)
+        self.iteration = 0
+        self.current_move = None
+        self.reset_assessment()
+
 
     def get_array(self):
         return self._array
@@ -155,13 +178,18 @@ class Board:
         return starts
 
 
-    def get_segment_items(self,x,y,dx,dy,length):
+    def get_segment_items(self,x,y,dx,dy,length=None):
         items=[]
         cx,cy=x,y
-        for l in range(length):
-            items.append([self.get_cell(cx,cy),cx,cy])
+        i=0
+        while self.valid(cx,cy):
+            if length!=None and i >=length:
+                break
+            items.append([cx,cy, self.get_cell(cx,cy)])
             cx+=dx
             cy+=dy
+            i+=1
+
         return items
 
     def get_chords(self):
@@ -183,7 +211,7 @@ class Board:
         # free=dict()
         # ball_count=0
         for i in range(len(items)):
-            color,cx,cy=items[i]
+            cx,cy,color=items[i]
             cand.poses[dpos(cx,cy)]=color
             if color!=None:
                 cand.colors.setdefault(color, ddot(pos=list(),name=color,count=0,cand=cand
@@ -220,10 +248,14 @@ class Board:
 
 
     def find_best_move(self):
+        if self.iteration==2:
+            debug=1
         self.reset_assessment()
         self.candidates()
         self.color_assessment()
-        return self.pick_best_move()
+        best_move = self.pick_best_move()
+        self.check_tentative_scrubs(best_move.pos_from,best_move.pos_to,best_move.color.name)
+        return best_move
 
     def pick_best_move(self):
         A=self._assessment
@@ -238,7 +270,7 @@ class Board:
         else:
             return None
 
-        return best_move,cand_color
+        return best_move
 
     def add_move_candidate(self, move, cand_color):
         A=self._assessment
@@ -313,7 +345,11 @@ class Board:
         # ca = self._bg.assess_connection_wo_node(start_node, end_node, start_edges, max_cut=3)
         # cut_prob = ca.cut_probability()
         lc = self._bg.fake_assess_connection_wo_node(start_node, end_node, start_edges, max_cut=3)
-        cut_prob = 1/lc
+        cut_prob=0
+        if lc == 0:
+            cut_prob==1000
+        else:
+            cut_prob = 1/lc
         print ("%s to %s: %f" % (start_node, end_node, cut_prob))
         return cut_prob
 
@@ -361,18 +397,37 @@ class Board:
                 all_candidates.append([x,y,dx,dy,length,cand])
         return all_candidates
 
-    def picked_balls(self,picked):
-        msg=",".join(["%s[%s,%s]" % (picked[i][2],picked[i][0],picked[i][1]) for i in range(0,len(picked))])
-        return msg
-
     def next_move(self):
+        history_item = dict(board=dict(move=list(), remove=list(), new=list()), random_state=None)
+        scrubbed=False
         if self.current_move:
+            history_item['board']['move'].append((self.current_move.pos_from
+                                        , self.current_move.pos_to
+                                        , self.current_move.color.name))
             self.make_move(self.current_move)
-        self.picked= self.get_random_free_cells()
-        self.place(self.picked)
-        self.last_balls= self.picked_balls(self.picked)
+            history_item['board']['remove']=self._scrubs
+            if self._scrubs:
+                scrubbed=True
+            self.scrub_cells()
+        self.picked=[]
+        if not scrubbed:
+            self.picked= self.get_random_free_cells()
+            self.place(self.picked)
+        history_item['board']['new']=self.picked
+        history_item['random_state'] = base64.b64encode(pickle.dumps(random.getstate())).decode('ascii')
+
+        if len(self._history) > self.iteration:
+            self._history=self._history[:self.iteration]
+        assert len(self._history) == self.iteration
+        self._history.append(history_item)
+        self.iteration+=1
         self._bg.update_graph(self)
-        self.current_move,_ = self.find_best_move()
+        self.current_move = self.find_best_move()
+        return self.picked
+
+    def history_post_load(self):
+        self._bg.update_graph(self)
+        self.current_move = self.find_best_move()
         return self.picked
 
     def draw(self, show=False):
@@ -384,6 +439,8 @@ class Board:
     def draw_move(self):
         self._bg.init_drawing(self._axes)
         self._bg.draw()
+        start_edges=None
+        tentative_scrub_edges=None
         if not self.current_move:
             f=t=None
         else:
@@ -394,7 +451,10 @@ class Board:
             end_node = (move.pos_to.x, move.pos_to.y)
             adj_free = self.free_adj_cells(move.pos_from)
             start_edges = [(start_node, tuple(adj)) for adj in adj_free]
-        self._bg.draw_move(self, f,t, start_edges)
+            if self._tentative_scrubs:
+                ts= self._tentative_scrubs
+                tentative_scrub_edges = [((ts[i].x, ts[i].y),(ts[i+1].x, ts[i+1].y)) for i in range(len(ts)-1)]
+        self._bg.draw_move(self, f,t, start_edges, tentative_scrub_edges)
         self._bg.show()
 
     def get_cells_by_color(self,color):
@@ -402,29 +462,56 @@ class Board:
 
     def place(self,picked):
         for item in picked:
-            (x,y,color)=item
-            self._array[x][y]=color
-            self._color_list.setdefault(color,dict())[dpos(x,y)]=1
-            # self.color_lists[color]
+            (pos,color)=item
+            if self._scrubs:
+                self.scrub_cells()
+            self.fill_cell(pos,color)
+            self._scrubs = self.check_scrubs(pos)
         self.update_graph()
-        self.update_buffer()
+        # self.update_buffer()
 
-    def make_move(self,move,cand):
+    def place_history(self,picked):
+        for item in picked:
+            (pos,color)=item
+            self.fill_cell(pos,color)
+
+    def free_cell(self,pos:dpos, color:str):
+        assert self._array[pos.x][pos.y]==color
+        self._array[pos.x][pos.y]=None
+        del self._color_list[color][pos]
+
+    def fill_cell(self,pos:dpos, color:str):
+        assert self._array[pos.x][pos.y] == None
+        self._array[pos.x][pos.y] = color
+        self._color_list.setdefault(color, dict())[pos] = 1
+
+    def make_move(self,move):
         f=move.pos_from
         t=move.pos_to
         path = self._bg.check_path((f.x,f.y),(t.x,t.y))
         if not path:
             raise("no path")
 
-        assert self._array[f.x][f.y] == move.color
-        assert self._array[t.x][t.y]==None
-        self._array[f.x][f.y]=None
-        self._array[t.x][t.y]=move.color
-        self.check_scrubs(move.pos_to)
+        # assert self._array[f.x][f.y] == move.color.name
+        # assert self._array[t.x][t.y]==None
+        # self._array[f.x][f.y]=None
+        # self._array[t.x][t.y]=move.color.name
+        self.free_cell(move.pos_from,move.color.name)
+        self.fill_cell(move.pos_to, move.color.name)
+        self.current_move=None
 
-        self.update_graph()
-        self.update_buffer()
+        # self.update_graph()
+        # self.update_buffer()
 
+        return self.check_scrubs(move.pos_to)
+
+    def make_history_move(self,move):
+        f=move[0]
+        t=move[1]
+        self.free_cell(f,move[2])
+        self.fill_cell(t, move[2])
+        self.check_scrubs(t)
+        self.scrub_cells()
 
     def update_graph(self):
         self._bg.update_graph(self)
@@ -445,8 +532,8 @@ class Board:
         free=[]
         for i in range(0,self._size):
             for j in range(0,self._size):
-                if (self.cell(ddot(x=i,y=j))==None):
-                    free.append([i,j,self._colors[randrange(self._colsize)]])
+                if (self.cell(dpos(x=i,y=j))==None):
+                    free.append(dpos(i,j))
         return free
 
     def get_random_free_cells(self,batch=None):
@@ -457,7 +544,7 @@ class Board:
             if len(free)<1:
                 break
             pick = randint(0,len(free)-1)
-            picked.append(free[pick])
+            picked.append((free[pick], self._colors[randrange(self._colsize)]))
             free[pick]=free[-1]
             free.pop()
         return picked
@@ -468,72 +555,115 @@ class Board:
         return False
 
     def get_scrubs_XY(self,pos:dpos):
-        # _dirs = [
-        #     [1,0], [1,1], [0,1], [-1,1]
-        # ]
-        x,y=tuple(dpos)
+        x,y=tuple(pos)
         scrubs = []
         color = self._array[x][y]
         if color == None:
             return scrubs
         for dir in self._dirs[:4]:
-            scrub = [[x,y]]
-            (sx,sy)=dir
-            (cx,cy)=(x,y)
-            while True:
-                cx+=sx
-                cy+=sy
-                if not self.valid(cx,cy):
-                    break
-                if self._array[cx][cy]==color:
-                    scrub.append([cx,cy])
-                else:
-                    break
-            if len(scrub)>=self._scrub_length:
-                # import pdb;pdb.set_trace()
-                scrubs.append(scrub)
+            (dx, dy) = dir
+            fw = self.get_segment_items(x, y, dx, dy)
+            bw = self.get_segment_items(x, y, -dx, -dy)
+
+            fw_i=next((i for i, x in enumerate(fw) if x[2]!=color), len(fw))
+            bw_i=next((i for i, x in enumerate(bw) if x[2]!=color), len(bw))
+
+            if fw_i+bw_i-1 < self._scrub_length:
+                continue
+
+            scrub = [ (v[0],v[1]) for v in itertools.chain(reversed(bw[1:bw_i]), fw[0:fw_i])]
+            scrubs.append(scrub)
+            # (cx,cy)=(x,y)
+            # while True:
+            #     cx+=sx
+            #     cy+=sy
+            #     if not self.valid(cx,cy):
+            #         break
+            #     if self._array[cx][cy]==color:
+            #         scrub.append(dpos(cx,cy))
+            #     else:
+            #         break
+            # if len(scrub)>=self._scrub_length:
+            #     # import pdb;pdb.set_trace()
+            #     scrubs.append(scrub)
         return scrubs
 
-    def check_scrubs(self,pos:dpos):
+    def check_scrubs(self, pos: dpos):
         # scrub_cells=[]
-        self.scrubs=self.get_scrubs_XY(pos)
+        self._scrubs = self.get_scrubs_XY(pos)
+
         # for i in range(0,self._size):
         #     for j in range(0, self._size):
-        #         self.scrubs += self.get_scrubs_XY(i,j)
-        return self.scrubs
+        #         self._scrubs += self.get_scrubs_XY(i,j)
+        return self._scrubs
 
-    def get_slope(self,scrub):
-        f = scrub[0]
-        l = scrub[-1]
-        w = l[0]-f[0]
-        h = l[1]-f[1]
-        if w ==0:
-            slope= '-'
-        elif h==0:
-            slope='|'
-        elif w==h:
-            slope='\\'
-        elif w==-h:
-            slope='/'
-        return slope
+    def check_tentative_scrubs(self, pos_from:dpos, pos_to:dpos, color):
+        # scrub_cells=[]
 
-    def draw_scrub(self,scrub):
-        slope = self.get_slope(scrub)
-        for item in scrub:
-            self._buffer[item[0]][item[1]]=slope
+        self.free_cell(pos_from,color)
+        self.fill_cell(pos_to, color)
+        self._tentative_scrubs = self.get_scrubs_XY(pos_to)
+        self.free_cell(pos_to, color)
+        self.fill_cell(pos_from, color)
 
-
-    def draw_scrubs(self,scrubs=None):
-        self.scrubs = scrubs if scrubs else self.scrubs
-        for scrub in self.scrubs:
-            self.draw_scrub(scrub)
-        # self.prepare_view()
-        self.scrub_cells()
+        # for i in range(0,self._size):
+        #     for j in range(0, self._size):
+        #         self._scrubs += self.get_scrubs_XY(i,j)
+        return self._tentative_scrubs
 
     def scrub_cells(self,scrubs=None):
-        self.scrubs = scrubs if scrubs else self.scrubs
-        for scrub in self.scrubs:
+        self._scrubs = scrubs if scrubs else self._scrubs
+        scrubbed=dict()
+        for scrub in self._scrubs:
             for item in scrub:
-                self._array[item[0]][item[1]]=None
+                if not item in scrubbed:
+                    self.free_cell(dpos(item[0], item[1]), self.get_cell(item[0],item[1]))
+                    scrubbed[item]=1
+        self._scrubs=None
         # self.update_buffer()
 
+
+    def get_history(self):
+        return self._history
+
+    def set_history(self, history, iteration=None):
+        for item in history:
+            for i,move  in enumerate(item['board']['move']):
+                _move=(dpos.fromdict(move[0]), dpos.fromdict(move[1]), move[2])
+                item['board']['move'][i]=_move
+            _scrubs=[]
+            for i,scrub  in enumerate(item['board']['remove']):
+                _scrub=[]
+                for pos in scrub:
+                    _scrub.append(dpos(pos[0], pos[1]))
+                _scrubs.append(_scrub)
+            item['board']['remove']=_scrubs
+            for i, nb in enumerate(item['board']['new']):
+                _nb=(dpos.fromdict(nb[0]), nb[1])
+                item['board']['new'][i]=_nb
+
+        self._history=history
+        if iteration==0:
+            pass
+        else:
+            self.replay(iteration)
+
+    def replay(self, iteration=None):
+        self.reset()
+        if iteration==None:
+            iteration = len(self._history)
+        last_state=None
+        for i in range(iteration):
+            history_move = self._history[i]
+            for move in history_move['board']['move']:
+                self.make_history_move(move)
+            # for scrubs in history_move['board']['remove']:
+            #     self.scrub_cells(scrubs)
+            self.place(history_move['board']['new'])
+            self.picked=history_move['board']['new']
+            last_state=history_move['random_state']
+        self.iteration=iteration
+        if last_state:
+            state=pickle.loads(base64.b64decode(last_state))
+            random.setstate(state)
+        self.history_post_load()
