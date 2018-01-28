@@ -89,6 +89,11 @@ class Board_graph:
 
     def update_graph(self,board): # TODO: decouple
         a = board.get_array()
+
+        self.scrub_edges=[]
+        for i,tup in enumerate(board._scrubs):
+            if i>0:
+                self.scrub_edges.append((board._scrubs[i-1], tup))
         size = board.get_size()
         G = self.G = nx.grid_graph([size,size])
         attrs={}
@@ -148,11 +153,18 @@ class Board_graph:
         #     plt.show()
 
 
-    def draw_move(self, board, f:ddot, t:tuple, chained=False):
+    def draw_move(self, board, f:ddot, t:dpos, start_edges, chained=False):
+        FG=None
         if not f:
             return False
         try:
-            path=nx.shortest_path(self.G, f, t)
+            FG = self.FG
+            start_node=f.x,f.y
+            end_node=t.x,t.y
+            node_data = self.G.nodes[start_node]
+            FG.add_node(start_node, **node_data)
+            FG.add_edges_from(start_edges)
+            path=nx.shortest_path(FG, tuple(f), tuple(t))
         except nx.NetworkXNoPath:
             return False
         # parents = self.all_paths(start, end)
@@ -168,6 +180,8 @@ class Board_graph:
                 edges.append((node,path[i+1]))
 
         TG = self.G.edge_subgraph(edges)
+        if self.scrub_edges:
+            SG = self.G.edge_subgraph(self.scrub_edges)
         # g_path = nx.DiGraph()
         # g_path.add_nodes_from(TG)
         #
@@ -182,6 +196,8 @@ class Board_graph:
         self.draw(chained=True)
         plt.sca(self.axes)
         nx.draw_networkx_edges(TG, gna(self.G, 'pos'), width=2, edge_color='cyan')
+        if self.scrub_edges:
+            nx.draw_networkx_edges(SG, gna(self.G, 'pos'), width=3, style='dotted', edge_color='red')
         # nx.draw_networkx_edges(g_path_traceback, gna(self.G, 'pos'), width=1, edge_color='red')
         # if not chained:
         #     plt.show()
@@ -601,6 +617,8 @@ class Board_graph:
         ca.cycles_along_path(path, max_cut)
         return ca
 
+
+
     def assess_connection_wo_node(self, start, end, edges, max_cut=None):
         TG=self.FG.copy()
         node_data=self.G.nodes[start]
@@ -610,6 +628,17 @@ class Board_graph:
         path = nx.shortest_path(TG, start,end)
         ca.cycles_along_path(path, max_cut)
         return ca
+
+    def fake_assess_connection_wo_node(self, start, end, edges, max_cut=None):
+        TG=self.FG.copy()
+        node_data=self.G.nodes[start]
+        TG.add_node(start, **node_data)
+        TG.add_edges_from(edges)
+        lc = nx.load_centrality(TG, v=start)
+        # ca = connect_assessor_c(TG, self.G, self.OG, self.axes)
+        # path = nx.shortest_path(TG, start,end)
+        # ca.cycles_along_path(path, max_cut)
+        return lc
 
     def check_path(G, start:tuple, end:tuple):
         try:

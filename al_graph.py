@@ -34,20 +34,20 @@ def main():
     def start():
         nonlocal board
         # G=make_graph()
-        board= Board(size=9,batch=5,colsize=None,scrap_length=5,axes=main_ax)
+        board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax)
         # board.draw(show=False)
         picked=next_move()
-        # draw()
+        draw()
 
     
     def next_move():
-        scraps =board.check_scraps()
-        if (len(scraps) >0):
-            board.draw_scraps()
-            # board.prepare_view()
-            # draw()
-            board.scrap_cells()
-            return
+        # scraps =board.check_scraps()
+        # if (len(scraps) >0):
+        #     board.draw_scraps()
+        #     # board.prepare_view()
+        #     # draw()
+        #     board.scrap_cells()
+        #     return
 
         free_cells = board.get_free_cells()
         if len(free_cells)==0:
@@ -55,10 +55,6 @@ def main():
             return
 
         new_balls = board.next_move()
-        if len(new_balls)>0:
-            # board.prepare_view()
-            pass
-            # draw()
 
     def _exit():
         exit()
@@ -67,7 +63,7 @@ def main():
         # if event.click:
            # ax.plot((event.xdata, event.xdata), (mean-standardDeviation, mean+standardDeviation), 'r-')
         # import pdb;pdb.set_trace() # ddd
-        picked= next_move()
+        next_move()
         # G=make_graph()
         draw()
 
