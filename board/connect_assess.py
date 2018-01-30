@@ -61,7 +61,7 @@ class connect_assessor_c:
     start_node=None
     end_node=None
     cycle_sets=AttrDict()
-    debug_edge = ((5, 7), (4, 7), 3)
+    debug_edge = ((3,2), (4,2), 1)
     debug_edges = [debug_edge, back_edge(debug_edge)]
     debug_face = ((4, 4), (3, 4), 3)
     debug_face2 = ((None), (None), 1)
@@ -434,30 +434,7 @@ class connect_assessor_c:
                             continue
 
                         # check if backwards part of a cycle can make a loop
-                        def check_for_cycle_395():
-                            stretches=[]
-                            start_node=end_node=None
-                            for arc_edge, _ in arc_back:
-                                if arc_edge not in self.dagp_edges and back_edge(arc_edge) not in self.dagp_edges:
-                                    start_node= start_node or arc_edge[0]
-                                if arc_edge[1] in self.dagp:
-                                    if start_node:
-                                        stretches.append([start_node, arc_edge[1]])
-                                    start_node=None
-                            for i in range(len(stretches)):
-                                for j in range(i,len(stretches)):
-                                    start_node=stretches[i][0]
-                                    end_node=stretches[j][1]
-                                    reachable = self.reachable_parents.get(start_node)
-                                    if reachable and reachable.get(end_node):
-                                        break
-                                else:
-                                    continue
-                                break
-                            else:
-                                return False # cycle not found
-                            return True
-                        if check_for_cycle_395():
+                        if self.check_for_cycle(arc_back):
                             cycle_found=True
                             break
                         next_arc = _next_arc
@@ -501,7 +478,7 @@ class connect_assessor_c:
                 process_item(next_try[item_i])
             if len(next_try)<=len(scheduled_late):
                 # self._sp()
-                # assert False
+                assert False
                 break
 
         self.make_nx_dag()
@@ -517,6 +494,30 @@ class connect_assessor_c:
         return
 
 ######### DAG
+
+    def check_for_cycle(self,arc):
+        stretches = []
+        start_node = end_node = None
+        for arc_edge, _ in arc:
+            if arc_edge not in self.dagp_edges and back_edge(arc_edge) not in self.dagp_edges:
+                start_node = start_node or arc_edge[0]
+            if arc_edge[1] in self.dagp:
+                if start_node:
+                    stretches.append([start_node, arc_edge[1]])
+                start_node = None
+        for i in range(len(stretches)):
+            for j in range(i, len(stretches)):
+                start_node = stretches[i][0]
+                end_node = stretches[j][1]
+                reachable = self.reachable_parents.get(start_node)
+                if reachable and reachable.get(end_node):
+                    break
+            else:
+                continue
+            break
+        else:
+            return False  # cycle not found
+        return True
 
     def make_nx_dag(self):
         self.DAG=nx.DiGraph()
@@ -771,6 +772,7 @@ class connect_assessor_c:
         return None
 
     def add_face(self,arc_face,next_arc,arc_back,face_turn):
+        debug=1
         for arc_edge, junction in next_arc:
             if not arc_face:
                 arc_face = arc_edge  # face labeled after the edge that formed it
@@ -799,7 +801,8 @@ class connect_assessor_c:
                                 face_turn if edge==arc_edge else -face_turn
                         )
                         if arc_face!='outer':
-                            assert edge!=arc_edge # path edges are always backwards
+                            if not edge!=arc_edge: # path edges are always backwards
+                                assert False
                         # self.faces[arc_face].setdefault('initial', edge)
                         self.e2face.setdefault(edge, [None, None])[0] = arc_face
                         break
@@ -1037,6 +1040,8 @@ class connect_assessor_c:
         combinations=1
         rem_combinations=1
         for i in range(len(cut_count)):
+            if i>=len(self.DAG.nodes):
+                break
             combinations*=(len(self.DAG.nodes)-i)
             rem_combinations*=(i+1)
             _prob =  cut_count[i]/combinations/rem_combinations
@@ -1044,7 +1049,7 @@ class connect_assessor_c:
             prob_rest-=_prob
             if not (prob >=0 and prob < 1):
                 assert False
-            if not prob + prob_rest==1:
+            if not round(prob + prob_rest,3)==1:
                 assert False
         return prob
 

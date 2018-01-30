@@ -6,6 +6,7 @@ from random import randrange,randint
 from matplotlib.widgets import Button
 from collections import deque,defaultdict
 from attrdict import AttrDict
+from typing import List, Set, Dict, Tuple, Text, Optional, AnyStr
 
 
 from pprint import pprint
@@ -20,50 +21,15 @@ from .utils import *
 
 gna=nx.get_node_attributes; sna=nx.set_node_attributes
 
-
-
-def find_free(nodeset,x,y):
-    global size; cx=x; cy=y
-    if (x,y) in nodeset: return (x,y)
-    while True:
-        cy+=1
-        if (cy>=size): 
-            cy=0;cx+=1
-            if (cx>=size): cx=0
-        if cx==x and cy==y:
-            return None
-        if (cx,cy) in nodeset:
-            return (cx,cy)            
-
-def throw_dice(nodeset,n):
-    global size
-    thrown=dict()
-    n=min(len(nodeset), n)
-    nodeset_copy=set.copy(nodeset)
-    for i in range(n):
-        _x= randrange(size); _y=randrange(size)
-        free_node=find_free(nodeset_copy,_x,_y)
-        assert free_node!=None
-        if free_node in thrown:
-            display(thrown)
-            display((_x,_y))
-            display(free_node)
-        assert free_node not in thrown
-        nodeset_copy.remove(free_node)
-        thrown[free_node]=colors[randrange(len(colors))]
-    return thrown
-
-
 class Board_graph:
 
     axes=None
-
-    def __init__(self, axes=None):
-        self.axes=axes
-
     G = None
     metrics=dict()
-    axes=None
+
+    def __init__(self, axes: object = None) -> None:
+        self.axes=axes
+
 
     # def make_graph(board):
     #     a = board.get_array()
@@ -122,6 +88,28 @@ class Board_graph:
         # nx.set_node_attributes(G,nx.load_centrality(G),'lc_metric')
         # APG=FG.subgraph(ap).copy()
         return self.metrics
+
+    def change_free_graph(self, board, free_cells=[], fill_cells=[]):
+        for pos in free_cells:
+            node= (pos.x, pos.y)
+            node_data = self.G.nodes[node] # TODO: check intersections later
+            assert node not in self.FG.nodes
+            self.FG.add_node(node, **node_data)
+        for pos in free_cells:
+            node = (pos.x, pos.y)
+            for nei_node in self.G[node]:
+                if nei_node in self.FG:
+                    self.FG.add_edge(node,nei_node)
+        for pos in fill_cells:
+            node = (pos.x, pos.y)
+            assert node in self.FG.nodes
+            self.FG.remove_node(node)
+
+    def metric(self, metric, node):
+        value=None
+        if metric=='lc':
+            value=nx.load_centrality(self.FG, node)
+        return value
 
     def draw(self,chained=False):
         G,FG,OG = self.G,self.FG,self.OG # FIND: go about inappropriate calls
@@ -357,7 +345,7 @@ class Board_graph:
     def prev_i(_list,list_i):
         if not _list:
             return None
-        return (prev_i-1+len(_list))% len(_list)
+        return (list_i-1+len(_list))% len(_list)
 
     @staticmethod
     def prev_n(_list,list_i,cycle=True):
@@ -368,40 +356,40 @@ class Board_graph:
             return None,None
         return _list[i],i
 
-    @staticmethod
-    def m1(path,segments):
-        alt_path_segments=[]
-        for seg_i, item in enumerate(segments):
-            segment,cycle,cycle_dict=item
-            path_i,node= segment[0]
-            next_path_i=next_i(path,path_i)
-            a,b = [ cycle_dict[path[i]] for i in [path_i,next_path_i]]
-            if b==next_i(cycle, a):
-                pass
-            else:
-                alt_segment=[]
-                while True:
-                    alt_segment.append(a)
-                    a=next_i(cycle,a)
-                    if a==b:
-                        break
-                    assert len(alt_path)<100
+    # @staticmethod
+    # def m1(path,segments):
+    #     alt_path_segments=[]
+    #     for seg_i, item in enumerate(segments):
+    #         segment,cycle,cycle_dict=item
+    #         path_i,node= segment[0]
+    #         next_path_i=next_i(path,path_i)
+    #         a,b = [ cycle_dict[path[i]] for i in [path_i,next_path_i]]
+    #         if b==next_i(cycle, a):
+    #             pass
+    #         else:
+    #             alt_segment=[]
+    #             while True:
+    #                 alt_segment.append(a)
+    #                 a=next_i(cycle,a)
+    #                 if a==b:
+    #                     break
+    #                 assert len(alt_path)<100
 
     @staticmethod
     def get_node_cycles(node,cycle_sets):
         pass
 
 
-    @staticmethod
-    def check_direction(cycle_sets,cy_i,node,next_node):
-        nm=cycle_sets.node_map
-        cn_i=nm[node][cy_i] if node in nm else None
-        cn_i_next=nm[next_node][cy_i] if next_node in nm else None
-        if next_i(cycle_sets.cycles[cy_i],cn_i)==cn_i_next:
-            return 1
-        if prev_i(cycle_sets.cycles[cy_i],cn_i)==cn_i_next:
-            return -1
-        return None
+    # @staticmethod
+    # def check_direction(cycle_sets,cy_i,node,next_node):
+    #     nm=cycle_sets.node_map
+    #     cn_i=nm[node][cy_i] if node in nm else None
+    #     cn_i_next=nm[next_node][cy_i] if next_node in nm else None
+    #     if next_i(cycle_sets.cycles[cy_i],cn_i)==cn_i_next:
+    #         return 1
+    #     if prev_i(cycle_sets.cycles[cy_i],cn_i)==cn_i_next:
+    #         return -1
+    #     return None
 
 
     @staticmethod
@@ -465,34 +453,34 @@ class Board_graph:
         return tmin,dag
 
 
-    def get_cutsets(self,path,cycles,level=0):
-        if level>2:
-            return []
-        FG=self.FG
-        scheduled=dict()
-        cycle_sets=__class__.get_cycle_sets(cycles)
-        get_path_segments(path,cycle_sets)
-        nm = cycle_sets.node_map
-        for path_i,node in enumerate(path):
-            cy_indexes = nm[node]
-            next_node, next_i = next_n(path,path_i)
-            if next_node==None:
-                break
-            for cy_i in cy_indexes:
-                if cy_i in scheduled:
-                    continue
-                scheduled[cy_i]=1 # need to skip this sometimes
-                dir = check_direction(cycle_sets,cy_i,node,next_node)
-                end_node = None
-                segment = __class__.get_segment(cycle_sets, cy_i, start=node, dir=-dir)
-                get_cutsets_rv(self,segment)
-
-
-
-                cycle,node_dict= cycle_sets.cycles[cy_i]
-
-                check_direction(node,next_node,cycle)
-
+    # def get_cutsets(self,path,cycles,level=0):
+    #     if level>2:
+    #         return []
+    #     FG=self.FG
+    #     scheduled=dict()
+    #     cycle_sets=__class__.get_cycle_sets(cycles)
+    #     get_path_segments(path,cycle_sets)
+    #     nm = cycle_sets.node_map
+    #     for path_i,node in enumerate(path):
+    #         cy_indexes = nm[node]
+    #         next_node, next_i = next_n(path,path_i)
+    #         if next_node==None:
+    #             break
+    #         for cy_i in cy_indexes:
+    #             if cy_i in scheduled:
+    #                 continue
+    #             scheduled[cy_i]=1 # need to skip this sometimes
+    #             dir = check_direction(cycle_sets,cy_i,node,next_node)
+    #             end_node = None
+    #             segment = __class__.get_segment(cycle_sets, cy_i, start=node, dir=-dir)
+    #             get_cutsets_rv(self,segment)
+    #
+    #
+    #
+    #             cycle,node_dict= cycle_sets.cycles[cy_i]
+    #
+    #             check_direction(node,next_node,cycle)
+    #
 
 
 
@@ -500,55 +488,45 @@ class Board_graph:
     def get_cycle_patches(self,path,cycles):
         return None
 
-    def get_path_cutsets(self, path, cycles, level=0):
-        if level >2:
-            return [] 
-        FG=self.FG
-        patches=self.get_cycle_patches(path,cycles)
-        cutsets=dict()
-        for i in range(len(patches)):
-            patch = patches[i]
-            next_patch=patches[i+1] if i < len(patches)-1 else None
-            if patch.conn==1:
-                for node in patch.nodes:
-                    self.add_cutsets(cutsets,[node])
-                continue
-            if patch.conn==2:
-                if next_patch!=None:
-                    shared=self.intersect(cycles[patch.cycle],cycles[next_patch.cycle])
-                    pfw = self.get_cycle_patch(cycles[patch.cycle],start=patch.nodes[0],end=shared[0])
-                    pback =self.get_cycle_patch(cycles[patch.cycle],start=shared[-1],end=patch.nodes[0])
-                    trimmed_cycles=[cycles[j] for j in range(len(cycles)) if j!=i]
-                    fw_cutsets=self.get_path_cutsets(pfw,trimmed_cycles, level+1)
-                    back_cutsets=self.get_path_cutsets(pback,trimmed_cycles, level+1)
-                    for i in fw_cutsets:
-                        for j in back_cutsets:
-                            self.add_cutsets(cutsets, i+j)
+    # def get_path_cutsets(self, path, cycles, level=0):
+    #     if level >2:
+    #         return []
+    #     FG=self.FG
+    #     patches=self.get_cycle_patches(path,cycles)
+    #     cutsets=dict()
+    #     for i in range(len(patches)):
+    #         patch = patches[i]
+    #         next_patch=patches[i+1] if i < len(patches)-1 else None
+    #         if patch.conn==1:
+    #             for node in patch.nodes:
+    #                 self.add_cutsets(cutsets,[node])
+    #             continue
+    #         if patch.conn==2:
+    #             if next_patch!=None:
+    #                 shared=self.intersect(cycles[patch.cycle],cycles[next_patch.cycle])
+    #                 pfw = self.get_cycle_patch(cycles[patch.cycle],start=patch.nodes[0],end=shared[0])
+    #                 pback =self.get_cycle_patch(cycles[patch.cycle],start=shared[-1],end=patch.nodes[0])
+    #                 trimmed_cycles=[cycles[j] for j in range(len(cycles)) if j!=i]
+    #                 fw_cutsets=self.get_path_cutsets(pfw,trimmed_cycles, level+1)
+    #                 back_cutsets=self.get_path_cutsets(pback,trimmed_cycles, level+1)
+    #                 for i in fw_cutsets:
+    #                     for j in back_cutsets:
+    #                         self.add_cutsets(cutsets, i+j)
 
 
-    def cutoff_probability(self, cutsets):
-        prob=0
-        c1 = [ x for x in cutsets if len(x) ==1]
-        c2 = [ x for x in cutsets if len(x) ==2]
-        c3 = [ x for x in cutsets if len(x) ==3]
-        node_count=len(self.FG.nodes)
-        prob = c1/node_count
-        if node_count>1:
-            prob += c2 / (node_count*(node_count-1))
-
-
-        if node_count>2:
-            prob += c3 / (node_count*(node_count-1)*(node_count-2))
-
-
-
-
-
-
-
-
-
-
+    # def cutoff_probability(self, cutsets):
+    #     prob=0
+    #     c1 = [ x for x in cutsets if len(x) ==1]
+    #     c2 = [ x for x in cutsets if len(x) ==2]
+    #     c3 = [ x for x in cutsets if len(x) ==3]
+    #     node_count=len(self.FG.nodes)
+    #     prob = c1/node_count
+    #     if node_count>1:
+    #         prob += c2 / (node_count*(node_count-1))
+    #
+    #
+    #     if node_count>2:
+    #         prob += c3 / (node_count*(node_count-1)*(node_count-2))
 
     def path(self,x,y,x2,y2):
         assert self.G!=None
@@ -625,22 +603,26 @@ class Board_graph:
         TG.add_node(start, **node_data)
         TG.add_edges_from(edges)
         ca = connect_assessor_c(TG, self.G, self.OG, self.axes)
-        path = nx.shortest_path(TG, start,end)
+        try:
+            path = nx.shortest_path(TG, start,end)
+        except nx.NetworkXNoPath:
+            return None
+
         ca.cycles_along_path(path, max_cut)
         return ca
 
-    def fake_assess_connection_wo_node(self, start, end, edges, max_cut=None):
-        TG=self.FG.copy()
-        node_data=self.G.nodes[start]
-        TG.add_node(start, **node_data)
-        TG.add_edges_from(edges)
-        lc = nx.load_centrality(TG, v=start)
+    def fake_assess_connection_wo_node(self, start, end, max_cut=None) -> float:
+        # TG=self.FG.copy()
+        # node_data=self.G.nodes[start]
+        # TG.add_node(start, **node_data)
+        # TG.add_edges_from(edges)
+        lc:float = nx.load_centrality(self.FG, v=start)
         # ca = connect_assessor_c(TG, self.G, self.OG, self.axes)
         # path = nx.shortest_path(TG, start,end)
         # ca.cycles_along_path(path, max_cut)
         return lc
 
-    def check_path(self, start:tuple, end:tuple):
+    def check_path(self, start:Tuple, end:Tuple) -> Optional[List]:
         try:
             path=nx.shortest_path(self.FG,start,end)
             return path

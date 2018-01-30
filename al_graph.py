@@ -73,7 +73,7 @@ def main():
         with open(history_file, 'r') as fh:
             jstr = fh.read()
             history = json.loads(jstr)
-            board.set_history(history,int(iteration))
+            board.set_history(history,iteration)
 
 
     def on_click(event):

@@ -112,9 +112,20 @@ class ddot(dict):
 
 class dpos(ddot):
     def __init__(self, x, y):
+        # assert x>=0 and y>=0
         super().__init__(x=x,y=y)
+
+    # def __setattr__(self,key,value):
+    #     if key == 'x' and value<0:
+    #         debug=1
+    #     super(ddot,self).__setattr__(key,value)
+
+    def copy(self):
+        return dpos(self.x,self.y)
+
     def __hash__(self):
         return (self.x,self.y).__hash__()
+
     def __iter__(self):
         yield self.x
         yield self.y
