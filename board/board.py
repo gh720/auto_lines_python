@@ -48,6 +48,8 @@ class Board:
         [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]
     ]
 
+    NOT_A_CELL=dpos(-1,-1)
+
     _straight_dirs=[]
     for dir in _dirs:
         if dir[0] and dir[1]:
@@ -69,6 +71,9 @@ class Board:
 
     _history=list()
 
+    debug_moves=[
+        (dpos(0,7),dpos(2,8))
+    ]
     # axes: x - left, y - up, directions enumerated anti-clockwise
 
     def __init__(self, size=9, batch=5, colsize=None, scrub_length=5, axes=None):
@@ -107,10 +112,15 @@ class Board:
         return self._size
 
     def reset_assessment(self):
+
+        def debug_sort(color):
+            r = color.move_in_out
+
+        cand_color_sort = lambda color: color.move_in_out
         self._assessment=ddot(moves=list()
                               , move_map=dict()
                               , candidates=list()
-                              , cand_colors=SortedListWithKey(key=lambda color: color.move_in_out)
+                              , cand_colors=SortedListWithKey(key=cand_color_sort)
                               , cand_color_moves=SortedListWithKey(key=lambda move: -move.gain)
                               , cand_color_map=dict()
                               , cand_map=dict()
@@ -359,6 +369,11 @@ class Board:
                     for pos in color_cells:
                         if pos in cand_color.cand.cells:
                             continue
+                        if self.debug_moves:
+                            if (tuple(pos), tuple(free_pos)) not in self.debug_moves:
+                                debug=1
+                            else:
+                                debug=1
                         move = ddot(pos_from=pos, pos_to=free_pos, color=cand_color)
                         self.add_move_candidate(move)
                         counter+=1
@@ -381,6 +396,11 @@ class Board:
                             continue
                         for free_pos, metric in dst_color.cand.free.items():
                             for pos_item in ob_color.cells:
+                                if self.debug_moves:
+                                    if (tuple(pos_item.cell), tuple(free_pos)) not in self.debug_moves:
+                                        debug=1
+                                    else:
+                                        debug=1
                                 move = ddot(pos_from=pos_item.cell, pos_to=free_pos, color=ob_color)
                                 self.add_move_candidate(move)
                                 counter+=1
@@ -401,16 +421,19 @@ class Board:
 
         mx_gain=-math.inf
         mx_loss=-math.inf
+        color_mio=[None]*8
         for cand in tgt_cands:
             for color_name,color in cand.colors.items():
                 if color_name == src_color:
                     if move.pos_from in color.cand.cells:
-                        gain=0
+                        color_mio[color.move_in_out] = 0
+                        # gain=0
                     else:
-                        gain=5-color.move_in_out
+                        color_mio[color.move_in_out] = max((color_mio[color.move_in_out]or 0), 5-color.move_in_out)
+                        # gain=5-color.move_in_out
                     # if impr_mio == None or impr_mio > color.move_in_out:
                     #     impr_mio = color.move_in_out
-                    mx_gain=max(gain,mx_gain)
+                    # mx_gain=max(gain,mx_gain)
                 else:
                     if move.pos_from in color.cand.cells:
                         loss=0
@@ -419,6 +442,11 @@ class Board:
                     mx_loss = max(loss, mx_loss)
                     # if detr_mio == None or detr_mio > color.move_in_out:
                     #     detr_mio = color.move_in_out
+
+        for gain in color_mio:
+            if gain != None:
+                mx_gain = gain
+                break
 
         mx_gain = 100 if mx_gain==4 else max(mx_gain,0)
         mx_loss = max(mx_loss,0)
@@ -492,10 +520,27 @@ class Board:
                 cost_max=max(cost,cost_max)
         return cost_max
 
+    def move_key(self,move):
+        move_key = (move.pos_from, move.pos_to)
+        return move_key
+
+    def cand_gain(self,move:ddot):
+        cand = move.color.cand
+        mx_gain = 0
+        mn_gain = 0
+        for cname, color in cand.colors.items():
+            if cname!=move.color.name:
+                for cell in color.cells:
+                    gain = self.mio_src_gain(ddot(pos_from=cell.cell, pos_to=self.NOT_A_CELL, color=color))
+                    mx_gain = max(gain, mx_gain)
+                    mn_gain = min(gain, mn_gain)
+        return mx_gain+mn_gain
+
+
     def add_move_candidate(self, move:ddot):
         cand_color=move.color
         A=self._assessment
-        move_key = (move.pos_from, move.pos_to)
+        move_key= self.move_key(move)
         if move_key in A.move_map:
             return
 
@@ -513,6 +558,9 @@ class Board:
         src_gain = self.mio_src_gain(move)
         tgt_gain = self.mio_tgt_gain(move)
 
+        cand_gain = self.cand_gain(move)
+
+
         # for from_cand_color in from_colors:
         #     if from_cand_color.name==cand_color.name: # penalty
         #         if mio ==None or mio > from_cand_color.move_in_out:
@@ -527,7 +575,7 @@ class Board:
 
         ob_block_cost = self.obst_block_check(move.pos_to, cand_color)
 
-        gain  = (src_gain+tgt_gain)*1.0 - ob_block_cost - lc*2 + cut_prob
+        gain  = (src_gain+tgt_gain+cand_gain)*1.0 - ob_block_cost - lc*2 + cut_prob
 
         move.gain = gain
         move.gain_detail= [src_gain, tgt_gain, ob_block_cost, lc, cut_prob]

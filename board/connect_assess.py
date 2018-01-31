@@ -58,21 +58,21 @@ def back_edge(edge):
     return (edge[1], edge[0], (edge[2] + 2) % len(DIRS))
 
 class connect_assessor_c:
-    start_node=None
-    end_node=None
-    cycle_sets=AttrDict()
-    debug_edge = ((3,2), (4,2), 1)
+    debug_edge = ((1,3), (0,3), 3)
     debug_edges = [debug_edge, back_edge(debug_edge)]
     debug_face = ((4, 4), (3, 4), 3)
     debug_face2 = ((None), (None), 1)
 
     # outer_node = ((None, None))
     outer_face = 'outer'
-    skipped_faces=[]
-    edges_to_skip=dict()
-    cycles_skipping=[]
 
     def __init__(self,G,posG=None,occG=None,axes=None):
+        self.start_node = None
+        self.end_node = None
+        self.cycle_sets = AttrDict()
+        self.skipped_faces = []
+        self.edges_to_skip = dict()
+        self.cycles_skipping = []
         self.axes=axes
         self.posG=posG
         self.G=G
@@ -408,7 +408,8 @@ class connect_assessor_c:
                     edge, suggested_turn = item
                     if edge in self.dagp_edges or back_edge(edge) in self.dagp_edges:
                         return
-                    tup, next_arc, arc_back, sum_of_turns, cycle_found, *_ = [None] * 10
+                    tup, next_arc, arc_back, sum_of_turns, back_cycle_found, *_ = [None] * 10
+                    cycle_found=0
                     for edge_turn in [suggested_turn, -suggested_turn]:
                         outer_turn = self.edges_to_skip.get(edge)
                         if outer_turn == edge_turn:  # if this will traverse outer cycle retry with opposite turn
@@ -416,16 +417,15 @@ class connect_assessor_c:
                         tup = self.arc_walk(edge, edge_turn)
                         if not type(tup) is tuple:
                             if tup == 'noose':
+                                cycle_found=2
                                 break
                             if tup == 'cycle':
-                                cycle_found = True
+                                cycle_found +=1
                                 continue
                             if tup == 'cycle_part':
                                 continue
                             break  # other cases, whatever
                         _next_arc, arc_back, sum_of_turns = tup
-                        if _next_arc[0][0]==((2,2),(3,2),1):
-                            debug=1
                         if not sum_of_turns:
                             assert False
                         if (sum_of_turns > 0 and edge_turn == LEFT
@@ -435,13 +435,13 @@ class connect_assessor_c:
 
                         # check if backwards part of a cycle can make a loop
                         if self.check_for_cycle(arc_back):
-                            cycle_found=True
-                            break
+                            back_cycle_found=True
+                            continue
                         next_arc = _next_arc
                         break # normal arc
 
                     if not next_arc:
-                        if cycle_found:
+                        if cycle_found==1 or back_cycle_found:
                             scheduled_late.append((edge, suggested_turn))
                         return
 
