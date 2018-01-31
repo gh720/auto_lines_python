@@ -68,11 +68,13 @@ class Board:
 
     iteration = None
     current_move = None
+    fake_prob=True
 
     _history=list()
 
     debug_moves=[
-        (dpos(0,7),dpos(2,8))
+        # ((0,7),(2,8)),
+        # ((1, 8), (0, 4))
     ]
     # axes: x - left, y - up, directions enumerated anti-clockwise
 
@@ -90,6 +92,10 @@ class Board:
         self.reset()
         self._bg.update_graph(self)
         # self.prepare_view()
+        self.max_color_candidates=10
+        self.max_free_moves=100
+        self.max_obst_moves=100
+
 
     def reset(self):
         # COLORS=['Y','B','P','G','C','R','M']
@@ -261,7 +267,7 @@ class Board:
 
         cand_colors = []
         for color_name, color in cand.colors.items():
-            color.move_in_out = len(cand.free) + (cand.ball_count - color.count)
+            color.move_in_out = len(cand.free) + (cand.ball_count - color.count)*2
             cand_colors.append(color)
             for item in color.cells:
                 A.cand_color_map.setdefault(item.cell,[]).append(color)
@@ -353,7 +359,7 @@ class Board:
         for cand_color in self._assessment.cand_colors:
             self.assess_color_placement(cand_color)
             counter+=1
-            if counter>10:
+            if counter>self.max_color_candidates:
                 break
 
 
@@ -372,12 +378,13 @@ class Board:
                         if self.debug_moves:
                             if (tuple(pos), tuple(free_pos)) not in self.debug_moves:
                                 debug=1
+                                continue
                             else:
                                 debug=1
                         move = ddot(pos_from=pos, pos_to=free_pos, color=cand_color)
                         self.add_move_candidate(move)
                         counter+=1
-                        if counter>20:
+                        if counter>self.max_free_moves:
                             return
         free_loop()
 
@@ -399,12 +406,13 @@ class Board:
                                 if self.debug_moves:
                                     if (tuple(pos_item.cell), tuple(free_pos)) not in self.debug_moves:
                                         debug=1
+                                        continue
                                     else:
                                         debug=1
                                 move = ddot(pos_from=pos_item.cell, pos_to=free_pos, color=ob_color)
                                 self.add_move_candidate(move)
                                 counter+=1
-                                if counter>20:
+                                if counter>self.max_obst_moves:
                                     return
         obst_loop()
 
@@ -429,7 +437,10 @@ class Board:
                         color_mio[color.move_in_out] = 0
                         # gain=0
                     else:
-                        color_mio[color.move_in_out] = max((color_mio[color.move_in_out]or 0), 5-color.move_in_out)
+                        color_mio[color.move_in_out] = max(
+                            (color_mio[color.move_in_out]or 0)
+                            , self._scrub_length+1-color.move_in_out
+                        )
                         # gain=5-color.move_in_out
                     # if impr_mio == None or impr_mio > color.move_in_out:
                     #     impr_mio = color.move_in_out
@@ -438,7 +449,7 @@ class Board:
                     if move.pos_from in color.cand.cells:
                         loss=0
                     else:
-                        loss=5-color.move_in_out
+                        loss=self._scrub_length-(color.move_in_out+2)
                     mx_loss = max(loss, mx_loss)
                     # if detr_mio == None or detr_mio > color.move_in_out:
                     #     detr_mio = color.move_in_out
@@ -448,13 +459,13 @@ class Board:
                 mx_gain = gain
                 break
 
-        mx_gain = 100 if mx_gain==4 else max(mx_gain,0)
+        mx_gain = 100 if mx_gain==self._scrub_length else max(mx_gain,0)
         mx_loss = max(mx_loss,0)
 
         # gain = 0 if impr_mio==None else (100 if impr_mio<=1 else self._scrub_length - impr_mio)
         # loss = 0 if detr_mio==None else (100 if detr_mio<=1 else self._scrub_length - detr_mio)
 
-        return mx_gain - mx_loss
+        return mx_gain, mx_loss
 
     def mio_src_gain(self, move:ddot):
         A=self._assessment
@@ -490,7 +501,7 @@ class Board:
         # gain = 0 if impr_mio == None else self._scrub_length - impr_mio
         # loss = 0 if detr_mio == None else self._scrub_length - detr_mio
 
-        return mx_gain - mx_loss
+        return mx_gain, mx_loss
 
 
     def obst_block_check(self, pos, cand_color) ->float:
@@ -521,20 +532,20 @@ class Board:
         return cost_max
 
     def move_key(self,move):
-        move_key = (move.pos_from, move.pos_to)
+        move_key = (tuple(move.pos_from), tuple(move.pos_to))
         return move_key
 
-    def cand_gain(self,move:ddot):
+    def cand_cost(self,move:ddot):
         cand = move.color.cand
         mx_gain = 0
-        mn_gain = 0
+        mx_loss = 0
         for cname, color in cand.colors.items():
             if cname!=move.color.name:
                 for cell in color.cells:
-                    gain = self.mio_src_gain(ddot(pos_from=cell.cell, pos_to=self.NOT_A_CELL, color=color))
+                    gain,loss = self.mio_src_gain(ddot(pos_from=cell.cell, pos_to=self.NOT_A_CELL, color=color))
                     mx_gain = max(gain, mx_gain)
-                    mn_gain = min(gain, mn_gain)
-        return mx_gain+mn_gain
+                    mx_loss = min(loss, mx_loss)
+        return - mx_loss
 
 
     def add_move_candidate(self, move:ddot):
@@ -555,10 +566,13 @@ class Board:
         lc: float = self.tent_lc_metric(move.pos_from, move.pos_to)
         # best_src_colors = SortedListWithKey(key=lambda color: (-color.move_in_out, -color.lc))
 
-        src_gain = self.mio_src_gain(move)
-        tgt_gain = self.mio_tgt_gain(move)
+        src_gain,src_loss = self.mio_src_gain(move)
+        tgt_gain,tgt_loss = self.mio_tgt_gain(move)
 
-        cand_gain = self.cand_gain(move)
+        gain = max(src_gain, tgt_gain)
+        loss = max(src_loss, tgt_loss)
+
+        cand_cost = self.cand_cost(move)
 
 
         # for from_cand_color in from_colors:
@@ -575,20 +589,22 @@ class Board:
 
         ob_block_cost = self.obst_block_check(move.pos_to, cand_color)
 
-        gain  = (src_gain+tgt_gain+cand_gain)*1.0 - ob_block_cost - lc*2 + cut_prob
+        cost  = (gain-loss+cand_cost)*1.0 - ob_block_cost - lc*2 + cut_prob
 
         move.gain = gain
-        move.gain_detail= [src_gain, tgt_gain, ob_block_cost, lc, cut_prob]
+        move.gain_detail= ddot(gain=gain, loss=loss, src_gain=src_gain, src_loss=src_loss
+                               , tgt_gain=tgt_gain, tgt_loss=tgt_loss, ob_block_cost=ob_block_cost
+                               , lc=lc, cut_prob=cut_prob)
 
         A.move_map[move_key] = move
         # cand_color.moves.add(move)
         # cand_color.moves.add(move)
         A.cand_color_moves.add(move)
 
-        print("%d,%d>%d,%d: %.2f: sg=%.2f tg=%.2f ob=%.2f lc=%.2f cp=%.2f"
+        print("%d,%d>%d,%d: %.2f: sg=%.2f tg=%.2f cg=%.2f ob=%.2f lc=%.2f cp=%.2f"
               % (move.pos_from.x, move.pos_from.y
                  , move.pos_to.x, move.pos_to.y
-                 , gain, src_gain, tgt_gain, ob_block_cost, lc, cut_prob))
+                 , cost, gain, loss, cand_cost, ob_block_cost, lc, cut_prob))
 
     def tent_lc_metric(self, cell:dpos, end_cell:dpos=None) -> float:
         """
@@ -640,29 +656,32 @@ class Board:
         end_node=(move.pos_to.x, move.pos_to.y)
         adj_free = self.free_adj_cells(move.pos_from)
         start_edges= [ (start_node, tuple(adj) ) for adj in adj_free]
-        ca = self._bg.assess_connection_wo_node(start_node, end_node, start_edges, max_cut=3)
-        if ca==None:
-            cut_prob=None
+        if not self.fake_prob:
+            ca = self._bg.assess_connection_wo_node(start_node, end_node, start_edges, max_cut=3)
+            if ca==None:
+                cut_prob=None
+            else:
+                cut_prob = ca.cut_probability()
+            return cut_prob
         else:
-            cut_prob = ca.cut_probability()
-        # self._bg.change_free_graph(self, free_cells=[move.pos_from], fill_cells=[])
-        # lc:float=None
-        # if self._bg.check_path(start_node, end_node):
-        #     lc = self._bg.fake_assess_connection_wo_node(start_node, end_node, max_cut=3)
-        # self._bg.change_free_graph(self, free_cells=[], fill_cells=[move.pos_from])
+            self._bg.change_free_graph(self, free_cells=[move.pos_from], fill_cells=[])
+            lc:float=None
+            if self._bg.check_path(start_node, end_node):
+                lc = self._bg.fake_assess_connection_wo_node(start_node, end_node, max_cut=3)
+            self._bg.change_free_graph(self, free_cells=[], fill_cells=[move.pos_from])
 
-        # if lc==None:
-        #     return None
-        # cut_prob=1-lc
-        # cut_prob=0
-        # if lc==None:
-        #     print("%s to %s: none" % (start_node, end_node))
-        #     return None
-        # if lc == 0:
-        #     cut_prob==1000
-        # else:
-        #     cut_prob = 1/lc
-        # print ("%s to %s: %f" % (start_node, end_node, cut_prob))
+            if lc==None:
+                return None
+            cut_prob=1-lc
+            # cut_prob=0
+            # if lc==None:
+            #     print("%s to %s: none" % (start_node, end_node))
+            #     return None
+            # if lc == 0:
+            #     cut_prob==1000
+            # else:
+            #     cut_prob = 1/lc
+            # print ("%s to %s: %f" % (start_node, end_node, cut_prob))
         return cut_prob
 
     def adj_cell(self, cell:dpos, dir:ddir):

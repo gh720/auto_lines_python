@@ -630,6 +630,15 @@ class Board_graph:
             pass
         return None
 
+    def get_components(self):
+        comps = nx.connected_components(self.FG)
+        result=[]
+        for comp in comps:
+            bry = nx.node_boundary(self.G, comp)
+            result.append(comp,bry)
+        return result
+
+
     # def bfs(g, start):
     #     queue, enqueued = deque([(None, start)]), set([start])
     #     while queue:
