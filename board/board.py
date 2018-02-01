@@ -73,7 +73,7 @@ class Board:
     _history=list()
 
     debug_moves=[
-        ((1,8),(0,4)),
+        # ((1,8),(0,6)),
         # ((1, 8), (0, 4))
     ]
     # axes: x - left, y - up, directions enumerated anti-clockwise
@@ -455,6 +455,7 @@ class Board:
                             counter+=1
                             if counter>self.max_free_moves:
                                 return
+            return
 
         free_loop()
 
@@ -486,6 +487,7 @@ class Board:
                                     counter+=1
                                     if counter>self.max_obst_moves:
                                         return
+            return
         obst_loop()
         return added
 
@@ -506,11 +508,15 @@ class Board:
             if src.name!=move.color.name:
                 continue
             src_key = self.color_cand_key(src)
+            src_dict[src_key]=src
             for tgt in tgt_cand_colors:
                 if tgt.name != src.name:
                     continue
                 tgt_key = self.color_cand_key(tgt)
-                sh = shared[src_key,tgt_key]=set([v.cell for v in src.cells ]) & set([v.cell for v in tgt.cells ])
+                tgt_dict[tgt_key] = tgt
+                sh = set([v.cell for v in src.cells ]) & set([v.cell for v in tgt.cells ])
+                if sh:
+                    shared.setdefault(src_key, dict())[tgt_key] =sh
 
 
 
@@ -557,9 +563,12 @@ class Board:
                     src_key=self.color_cand_key(src)
                     shared_tgt=shared.get(src_key,dict())
                     sh_mx=0
-                    for tgt in shared_tgt:
-                        tgt_key=self.color_cand_key(tgt)
-                        sh_mx=max(sh_mx, len(shared_tgt[tgt_key]))
+                    for tgt_key,tgt_shared in shared_tgt.items():
+                        tgt = tgt_dict.get(tgt_key)
+                        if not tgt or move.pos_to not in tgt.cand.cells:
+                            continue
+                        # tgt_key=self.color_cand_key(tgt)
+                        sh_mx=max(sh_mx, len(tgt_shared))
                     loss=5-src.move_in_out-sh_mx
                 mx_src_loss=max(loss,mx_src_loss)
             else:
