@@ -16,6 +16,7 @@ def main():
     parser.add_argument("-h", "--history", help="position history file")
     parser.add_argument("-i", "--iteration", help="position history file")
     parser.add_argument("-m", "--move", help="start from this position")
+    parser.add_argument("-l", "--log", help="log computation details")
 
     nargs, args = parser.parse_known_args()
 
@@ -24,7 +25,8 @@ def main():
     history_file=nargs.history or None
     default_history_file= 'al.history'
     iteration=nargs.iteration or None
-    free_cells =0 
+    free_cells =0
+    logfile = nargs.log or None
 
     def next_move():
         nonlocal board
@@ -53,7 +55,7 @@ def main():
     def start():
         nonlocal board
         # G=make_graph()
-        board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax)
+        board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile)
         # board.draw(show=False)
         if history_file:
             load_history()

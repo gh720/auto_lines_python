@@ -632,11 +632,21 @@ class Board_graph:
 
     def get_components(self):
         comps = nx.connected_components(self.FG)
-        result=[]
+        component_map=dict()
+        nonstuck=set()
         for comp in comps:
             bry = nx.node_boundary(self.G, comp)
-            result.append(comp,bry)
-        return result
+            _nonstuck = comp | bry
+            for node in _nonstuck:
+                component_map.setdefault(node,list()).append((comp, bry))
+            nonstuck|=_nonstuck
+
+        # stuck = set(self.G.nodes)-nonstuck
+        ns_bry = nx.node_boundary(self.G, nonstuck)
+        for stuck_node in ns_bry:
+            stuck_node_bry = nx.node_boundary(self.G, [stuck_node])
+            component_map.setdefault(stuck_node, list()).append((set(stuck_node), stuck_node_bry))
+        return component_map
 
 
     # def bfs(g, start):
