@@ -102,6 +102,13 @@ class ddot(dict):
         super(ddot, self).__init__(*args, **kwargs)
         self.__dict__ = self
 
+    def __getstate__(self):
+        return self
+
+    def __setstate__(self, state):
+        self.update(state)
+        self.__dict__ = self
+
     @classmethod
     def recursive_walk(cls, d):
         self = cls(d)
@@ -109,6 +116,7 @@ class ddot(dict):
             if type(value) is dict:
                 self[key] = cls.recursive_walk(value)
         return self
+
 
 class dpos(ddot):
     def __init__(self, x, y):
@@ -121,14 +129,14 @@ class dpos(ddot):
     #     super(ddot,self).__setattr__(key,value)
 
     def copy(self):
-        return dpos(self.x,self.y)
+        return dpos(self['x'],self['y'])
 
     def __hash__(self):
-        return (self.x,self.y).__hash__()
+        return (self['x'],self['y']).__hash__()
 
     def __iter__(self):
-        yield self.x
-        yield self.y
+        yield self['x']
+        yield self['y']
 
     @classmethod
     def fromdict(cls, dict):
@@ -140,14 +148,14 @@ class ddir(ddot):
         super().__init__(dx=x,dy=y)
 
     def __hash__(self):
-        return (self.dx,self.dy).__hash__()
+        return (self['dx'], self['dy']).__hash__()
 
     def copy(self):
-        return ddir(self.dx,self.dy)
+        return ddir(self['dx'], self['dy'])
 
     def __iter__(self):
-        yield self.dx
-        yield self.dy
+        yield self['dx']
+        yield self['dy']
 
     @classmethod
     def fromdict(cls, dict):

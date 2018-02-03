@@ -17,6 +17,8 @@ def main():
     parser.add_argument("-i", "--iteration", help="position history file")
     parser.add_argument("-m", "--move", help="start from this position")
     parser.add_argument("-l", "--log", help="log computation details")
+    parser.add_argument("-mf", "--max_free_moves", help="max free moves to assess at each recursion")
+    parser.add_argument("-mo", "--max_obstacle_moves", help="max obstacle removals to assess at each level of recursion")
 
     nargs, args = parser.parse_known_args()
 
@@ -57,6 +59,10 @@ def main():
         # G=make_graph()
         board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile)
         # board.draw(show=False)
+        if nargs.max_free_moves!=None:
+            board.max_free_moves=int(nargs.max_free_moves)
+        if nargs.max_obstacle_moves != None:
+            board.max_obstacle_moves = int(nargs.max_obst_moves)
         if history_file:
             load_history()
         else:
@@ -95,6 +101,8 @@ def main():
 
     figure = plt.figure(1,figsize=(6,6))
     main_ax = plt.subplot(111)
+    thismanager = plt.get_current_fig_manager()
+    thismanager.window.wm_geometry("+600+0")
     plt.show(block=False)
     # main_ax= plt.gca()
 
