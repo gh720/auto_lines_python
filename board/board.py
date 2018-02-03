@@ -49,7 +49,8 @@ class position_c:
     mio_counts:List[int]
     mio : Dict[Tuple[dpos,ddir],object]
     color_list:Dict[dpos,str]
-    mio_map: Dict[dpos,Dict[Tuple[dpos,ddir],object]]
+    board:object
+    # mio_map: Dict[dpos,Dict[Tuple[dpos,ddir],object]]
 
 
     def __init__(self, board=None):
@@ -57,8 +58,9 @@ class position_c:
         self.free_cells = dict()
         self.free_cell_count = 0
         self.mio = dict()
-        self.mio_map = dict()
+        # self.mio_map = dict()
         if board:
+            self.board=board
             self.array=copy.deepcopy(board._array)
             self.find_free_cells()
             self.free_cell_count = len(self.free_cells)
@@ -92,10 +94,14 @@ class position_c:
 
 
     def clear_mio(self, cell:dpos):
-        ckeys = self.mio_map[cell]
+        ckeys = self.board._assessment.cand_cell_map[cell]
         for ckey in ckeys:
             del self.mio[ckey]
-        del self.mio_map[cell]
+
+        # ckeys = self.mio_map[cell]
+        # for ckey in ckeys:
+        #     del self.mio[ckey]
+        # del self.mio_map[cell]
 
     def free_cell(self,cell:dpos, color:str=None):
         _color = self.array[cell.x][cell.y]
@@ -128,6 +134,41 @@ class position_c:
         new_pos = position_c()
         position_c.id +=1
         new_pos.id=position_c.id
+        new_pos.board=self.board
+        new_pos.mio=dict()
+        new_pos.color_list=dict()
+
+        new_pos.array = [
+            [None for i in range(0, self.board._size)]
+            for j in range(0, self.board._size)
+        ]
+
+        for i,ar in enumerate(pos.array):
+            for j,color in enumerate(ar):
+                new_pos.array[i][j]=color
+                cell = dpos(i, j)
+                if color ==None:
+                    new_pos.free_cells[cell]=1
+                else:
+                    new_pos.color_list.setdefault(color, dict())[cell] = 1
+        new_pos.free_cell_count=pos.free_cell_count
+
+        for ckey in pos.mio:
+            new_pos.mio[ckey]={ k:v for k,v in pos.mio[ckey].items() }
+        new_pos.mio_counts = pos.mio_counts[:]
+        # new_pos.mio = copy.deepcopy(pos.mio)
+        # new_pos.mio_counts = copy.deepcopy(pos.mio_counts)
+        # new_pos.mio_map = copy.deepcopy(pos.mio_map)
+        # new_pos.mio_slist = copy.deepcopy(pos.mio_slist)
+
+        return new_pos
+
+    def copy_(self):
+        # assert isinstance(pos,cls)
+        pos=self
+        new_pos = position_c()
+        position_c.id +=1
+        new_pos.id=position_c.id
         new_pos.array = copy.deepcopy(pos.array)
         new_pos.free_cells=copy.deepcopy(pos.free_cells)
         new_pos.free_cell_count=pos.free_cell_count
@@ -138,6 +179,7 @@ class position_c:
         # new_pos.mio_slist = copy.deepcopy(pos.mio_slist)
 
         return new_pos
+
 
 class move_c(ddot):
     cell_from:dpos
@@ -180,13 +222,14 @@ class Board:
 
     _history=list()
 
+    check_mio=True
     debug_moves=[
         ((2,4),(0,5)),
         # ((1, 8), (0, 4))
     ]
     # axes: x - left, y - up, directions enumerated anti-clockwise
 
-    def __init__(self, size=9, batch=5, colsize=None, scrub_length=5, axes=None, logfile=None):
+    def __init__(self, size=9, batch=5, colsize=None, scrub_length=5, axes=None, logfile=None, drawing_ready=None):
         if colsize==None:
             colsize=len(self._colors)
         self._size=size
@@ -206,6 +249,7 @@ class Board:
         self.max_obst_moves=10
         self.max_no_path_moves=100
         self.components=list()
+        self.drawing_ready = drawing_ready
         self._logfile=logfile
         if self._logfile:
             wh = open(self._logfile, 'w')
@@ -428,6 +472,24 @@ class Board:
         self.update_pos_components(pos)
         return pos
 
+    def dependent(self, move1:ddot, move2:ddot)->bool:
+        for cell1 in [move1.cell_from, move1.cell_to]:
+            for cell2 in [move2.cell_from, move2.cell_to]:
+                dx=cell1.x-cell2.x
+                dy=cell1.y-cell2.y
+                if dx==0 and abs(dy)<self._scrub_length:
+                    return True
+                if dy==0 and abs(dx)<self._scrub_length:
+                    return True
+                if abs(dx)==abs(dy) and abs(dx)<self._scrub_length:
+                    return True
+        return False
+
+    def move_tuple(self,move):
+        t= (move.cell_from.x, move.cell_from.y, move.cell_to.x, move.cell_to.y)
+        return t
+
+
     def search_ahead(self):
         A=self._assessment
         # for cand_color in A.color_cands:
@@ -436,13 +498,37 @@ class Board:
         A.position = self.get_original_position()
         A.best_moves = []
         queue=deque([(None,None,[])])
+        move_changes=dict()
         DEPTH=4
+        skipped=0
+
+        seen_trails=dict()
         while queue:
             move,position,trail=queue.popleft()
             if move!=None:
+                tt = tuple(sorted([ self.move_tuple(move) for move in trail ]))
+                if tt in seen_trails:
+                    skipped+=1
+                    continue
+                # if self.move_key(move) in move_changes:
+                #     dependent = False
+                #     for prev_move in trail[:-1]:
+                #         if self.move_key(prev_move) not in move_changes:
+                #             dependent=True
+                #             break
+                #         if self.dependent(move,prev_move):
+                #             dependent=True
+                #             break
+                #     if not dependent:
+                #         skipped+=1
+                #         continue
+
+                seen_trails[tt]=1
                 new_position = self.make_search_move(position, move)
                 diff = self.position_diff(original_position, new_position )
-                pos_str = "%s %s" % (",".join(
+                move_changes[self.move_key(move)]=1
+
+                pos_str = "%d %s %s" % (skipped, ",".join(
                     ["%d,%d>%d,%d" % (move.cell_from.x, move.cell_from.y, move.cell_to.x, move.cell_to.y)
                      for move in trail]
                 ), diff)
@@ -452,9 +538,13 @@ class Board:
                     A.best_moves=trail
                     A.position=new_position
                     pos_str = "* " + pos_str
+                    self.log(pos_str)
+                    if self.drawing_ready:
+                        self._bg.draw_moves(self,trail)
+                        self.drawing_ready()
                 else:
                     pos_str = "  " + pos_str
-                self.log(pos_str)
+                    self.log(pos_str)
             else:
                 new_position=A.position
 
@@ -485,7 +575,7 @@ class Board:
         cand_key=(cand.start, cand.dir)
 
         if pos.mio and cand_key in pos.mio:
-            cmio = pos.mio[cand_key][0]
+            cmio = pos.mio[cand_key]
             return cmio
 
         if not pos.mio:
@@ -493,9 +583,10 @@ class Board:
 
         cmio = self.comp_cand_mio(pos,cand)
 
-        pos.mio[cand_key] = (cmio,cand.cells)
-        for cell in cand.cells:
-            pos.mio_map.setdefault(cell, dict())[cand_key]=cmio
+        # pos.mio[cand_key] = (cmio,cand.cells)
+        pos.mio[cand_key] = cmio
+        # for cell in cand.cells:
+            # pos.mio_map.setdefault(cell, dict())[cand_key]=cmio
             # for ccolor, mio in cmio:
             #     pos.mio_slist.add((cand_key, ccolor, mio))
         return cmio
@@ -623,7 +714,8 @@ class Board:
         new_position = position.copy()
 
         # self.log("pos copy mio: %s" % (new_position.mio_counts))
-        mio_counts,cmio_map1 = self.pos_evaluation(new_position)
+        if self.check_mio:
+            mio_counts,cmio_map1 = self.pos_evaluation(new_position)
         # self.log("pos check mio: %s" % (mio_counts))
 
         color = new_position.cell(move.cell_from)
@@ -631,10 +723,11 @@ class Board:
         self.update_when_freeing(new_position,move.cell_from)
 
         color = new_position.free_cell(move.cell_from)
-        mio_counts,cmio_map2 = self.pos_evaluation(new_position)
-        diffs = self.cmp_cmio_map(cmio_map1, cmio_map2)
-        if mio_counts!=new_position.mio_counts:
-            assert False
+        if self.check_mio:
+            mio_counts,cmio_map2 = self.pos_evaluation(new_position)
+            diffs = self.cmp_cmio_map(cmio_map1, cmio_map2)
+            if mio_counts!=new_position.mio_counts:
+                assert False
         # src_cands= A.cand_cell_map[move.cell_from]
         #
         # for cand in src_cands:
@@ -646,10 +739,11 @@ class Board:
 
         scrubs= self.update_when_filling(new_position, move.cell_to, color )
         new_position.fill_cell(move.cell_to, color)
-        mio_counts,cmio_map3 = self.pos_evaluation(new_position)
-        diffs = self.cmp_cmio_map(cmio_map2,cmio_map3)
-        if mio_counts != new_position.mio_counts:
-            assert False
+        if self.check_mio:
+            mio_counts,cmio_map3 = self.pos_evaluation(new_position)
+            diffs = self.cmp_cmio_map(cmio_map2,cmio_map3)
+            if mio_counts != new_position.mio_counts:
+                assert False
 
         # tgt_cands= A.cand_cell_map[move.cell_to]
         #
@@ -666,9 +760,10 @@ class Board:
 
         if scrubs:
             self.make_search_scrubs(new_position, scrubs)
-        mio_counts,cmio_map4 = self.pos_evaluation(new_position)
-        if mio_counts != new_position.mio_counts:
-            assert False
+        if self.check_mio:
+            mio_counts,cmio_map4 = self.pos_evaluation(new_position)
+            if mio_counts != new_position.mio_counts:
+                assert False
 
         self.update_pos_components(new_position)
         # self.log("new pos mio: %s" % (new_position.mio_counts))
@@ -809,13 +904,15 @@ class Board:
             # for cand in A_cands:
             #     self.cand_mio(pos, ccell, cand)  # recomp if needed
             for cand_key, value in pos.mio.items():
-                for color, mio in value[0].items():
+                for color, mio in value.items():
                     mio_list.append((cand_key, color, mio))
             mio_slist = sorted(mio_list, key=lambda v: v[2])
 
             for item in mio_slist:
                 cand_key, color, mio=item
-                mio,cells = pos.mio[cand_key]
+                # mio=pos.mio[cand_key]
+                cand = A.candidates[cand_key]
+                cells=cand.cells
                 for cell in cells:
                     ccolor = pos.cell(cell)
                     if ccolor==None: # free
@@ -851,13 +948,14 @@ class Board:
                 clist = pos.color_list[obcolor]
                 dispatched=False
                 for ccell in clist:
-                    A_cands = A.cand_cell_map[ccell]
-                    for ckey, cand in A_cands.items():
+                    cands = A.cand_cell_map[ccell]
+                    for ckey, cand in cands.items():
                         self.cand_mio(pos,cand) # recomp if needed
-                    cands = pos.mio_map[ccell]
-                    assert len(A_cands)==len(cands)
-                    for ckey, cmio in cands.items():
-                        cells = pos.mio[ckey][1]
+                    # cands = pos.mio_map[ccell]
+                    # cands = A
+                    # assert len(A_cands)==len(cands)
+                    for ckey,cand in cands.items():
+                        cells=cand.cells
                         for cell in cells:
                             if cell in move_map[obcell]:
                                 continue

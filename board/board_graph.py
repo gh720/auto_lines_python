@@ -111,12 +111,15 @@ class Board_graph:
             value=nx.load_centrality(self.FG, node)
         return value
 
-    def draw(self,chained=False):
+    def draw(self,axes=True, chained=False):
         G,FG,OG = self.G,self.FG,self.OG # FIND: go about inappropriate calls
         # if not chained:
         #     plt.sca(axes)
         #     plt.cla()
-        plt.sca(self.axes)
+        if axes==True:
+            plt.sca(self.axes)
+        elif axes:
+            plt.sca(axes)
 
 
         # OG = G.subgraph([ x for x,data in G.nodes.items() if data['occupied']!=None] ).copy()
@@ -139,6 +142,55 @@ class Board_graph:
         # nx.draw_networkx_labels(G, pos=text, labels={ (x,y):str((x,y)) for x,y in gna(G,'pos') })
         # if not chained:
         #     plt.show()
+
+
+    def draw_moves(self, board, moves):
+        FG=None
+        self.draw(axes=False, chained=True)
+
+        for move in moves:
+            f=move.cell_from
+            t=move.cell_to
+            try:
+                FG = self.FG
+                start_node=f.x,f.y
+                end_node=t.x,t.y
+                node_data = self.G.nodes[start_node]
+                color = node_data['color']
+                FG.add_node(start_node, **node_data)
+                for nei_node in self.G[start_node]:
+                    if nei_node in self.FG:
+                        FG.add_edge(start_node, nei_node)
+                path=nx.shortest_path(FG, tuple(f), tuple(t))
+            except nx.NetworkXNoPath:
+                return False
+            edges=[]
+            for i,node in enumerate(path):
+                if i<len(path)-1:
+                    edges.append((node,path[i+1]))
+
+            TG = self.G.edge_subgraph(edges)
+            # plt.sca(self.axes)
+            nx.draw_networkx_edges(TG, gna(self.G, 'pos'), width=2, edge_color=color or 'cyan')
+            # if tentative_scrub_edges:
+            #     SG = self.G.edge_subgraph(tentative_scrub_edges)
+        # g_path = nx.DiGraph()
+        # g_path.add_nodes_from(TG)
+        #
+        # g_path_traceback = g_path.copy()
+        #
+        # g_path.add_edges_from(edges)
+        # g_path_traceback.add_edges_from(edges_traceback)
+
+        # if not chained:
+        #     plt.sca(axes)
+        #     plt.cla()
+        # if tentative_scrub_edges:
+        #     nx.draw_networkx_edges(SG, gna(self.G, 'pos'), width=3, style='dotted', edge_color='red')
+        # nx.draw_networkx_edges(g_path_traceback, gna(self.G, 'pos'), width=1, edge_color='red')
+        # if not chained:
+        #     plt.show()
+        return True
 
 
     def draw_move(self, board, f:ddot, t:dpos, start_edges, tentative_scrub_edges, chained=False):

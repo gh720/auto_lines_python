@@ -54,10 +54,14 @@ def main():
     def draw2():
         board._bg.draw(main_ax)
 
+    def show():
+        plt.show(block=True)
+        board.log("trying to show!")
+
     def start():
         nonlocal board
         # G=make_graph()
-        board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile)
+        board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile, drawing_ready=None)
         # board.draw(show=False)
         if nargs.max_free_moves!=None:
             board.max_free_moves=int(nargs.max_free_moves)
@@ -112,6 +116,8 @@ def main():
     figure.tight_layout()
     bcut = Button(axcut, 'YES', color='red', hovercolor='green')
     bcut.on_clicked(_exit)
+
+    plt.sca(main_ax)
 
     mpl.rcParams['keymap.save'].remove('s')
     mpl.rcParams['keymap.quit'].remove('q')
