@@ -30,6 +30,9 @@ def main():
     free_cells =0
     logfile = nargs.log or None
 
+    stages = ('assessment', 'after_throw', 'move_found')
+    stages_to_show=('assessment', 'after_throw', 'move_found')
+
     def next_move():
         nonlocal board
         # scraps =board.check_scraps()
@@ -58,14 +61,21 @@ def main():
         plt.show(block=True)
         board.log("trying to show!")
 
+    def drawing_callback(stage):
+        if stage in stages:
+            plt.show(block=True)
+
     def start():
         nonlocal board
         # G=make_graph()
-        board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile, drawing_ready=None)
+        board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile
+                     , drawing_callbacks= { stage: (drawing_callback if stage in stages_to_show else None)
+                                            for stage in stages }
+                     )
         # board.draw(show=False)
         if nargs.max_free_moves!=None:
             board.max_free_moves=int(nargs.max_free_moves)
-        if nargs.max_obstacle_moves != None:
+        if nargs.max_obstacle_moves != None:1
             board.max_obstacle_moves = int(nargs.max_obst_moves)
         if history_file:
             load_history()

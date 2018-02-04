@@ -51,8 +51,12 @@ def prev_i_in_loop(array,i):
     return (i-1+len(array))%len(array)
 
 
-def clear():
-    subprocess.check_call('cls', shell=True)
+
+def sign(v):
+    return -(v<0) or +(v>0)
+
+# def clear():
+#     subprocess.check_call('cls', shell=True)
 
 class _Getch:
     """
@@ -116,6 +120,8 @@ class ddot(dict):
             if type(value) is dict:
                 self[key] = cls.recursive_walk(value)
         return self
+
+
 
 
 class dpos(ddot):
