@@ -50,20 +50,15 @@ def main():
 
         new_balls = board.next_move()
 
-    def draw():
-        board.draw_move()
-
-
-    def draw2():
-        board._bg.draw(main_ax)
-
-    def show():
-        plt.show(block=True)
-        board.log("trying to show!")
+    # def draw():
+    #     board.draw_move()
 
     def drawing_callback(stage):
         if stage in stages:
-            plt.show(block=True)
+            board.log("show: stage %s, I:%s" % (stage, ['off','on'][plt.isinteractive()]))
+            plt.pause(0.001)
+            # plt.show(block=False)
+
 
     def start():
         nonlocal board
@@ -75,13 +70,13 @@ def main():
         # board.draw(show=False)
         if nargs.max_free_moves!=None:
             board.max_free_moves=int(nargs.max_free_moves)
-        if nargs.max_obstacle_moves != None:1
+        if nargs.max_obstacle_moves != None:
             board.max_obstacle_moves = int(nargs.max_obst_moves)
         if history_file:
             load_history()
         else:
             picked=next_move()
-        draw()
+        # draw()
 
     def save_history():
         nonlocal board
@@ -104,7 +99,7 @@ def main():
         # import pdb;pdb.set_trace() # ddd
         next_move()
         # G=make_graph()
-        draw()
+        # draw()
 
     def on_keypress(event):
         if event.key=='s':
@@ -117,7 +112,7 @@ def main():
     main_ax = plt.subplot(111)
     thismanager = plt.get_current_fig_manager()
     thismanager.window.wm_geometry("+600+0")
-    plt.show(block=False)
+
     # main_ax= plt.gca()
 
     plt.connect('button_press_event', on_click)
@@ -137,6 +132,9 @@ def main():
     # plt.show()
 
     start()
+
+    plt.ioff()
+    plt.show()
 
 if __name__ == '__main__':
     main()

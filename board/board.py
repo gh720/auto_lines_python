@@ -591,73 +591,6 @@ class Board:
                     heappush(hqueue, ((self.negate_tuple(estimate),-unique, new_move, new_position, _trail)))
         return A.best_moves, A.position
 
-
-    def search_ahead_(self):
-        A=self._assessment
-        # for cand_color in A.color_cands:
-        #     self.assess_color_placement(cand_color)
-        original_position = self.get_original_position()
-        A.position = self.get_original_position()
-        A.best_moves = []
-        queue=deque([(None,None,[])])
-        move_changes=dict()
-        DEPTH=4
-        skipped=0
-
-        seen_trails=dict()
-        while queue:
-            move,position,trail=queue.popleft()
-            if move!=None:
-                tt = tuple(sorted([ self.move_tuple(move) for move in trail ]))
-                if tt in seen_trails:
-                    skipped+=1
-                    continue
-                # if self.move_key(move) in move_changes:
-                #     dependent = False
-                #     for prev_move in trail[:-1]:
-                #         if self.move_key(prev_move) not in move_changes:
-                #             dependent=True
-                #             break
-                #         if self.dependent(move,prev_move):
-                #             dependent=True
-                #             break
-                #     if not dependent:
-                #         skipped+=1
-                #         continue
-
-                seen_trails[tt]=1
-                new_position = self.make_search_move(position, move)
-                diff = self.position_diff(original_position, new_position )
-                move_changes[self.move_key(move)]=1
-
-                pos_str = "%s %s" % (",".join(
-                    ["%s:%d,%d>%d,%d" % ((original_position.cell(move.cell_from)or 'None')[0]
-                                         , move.cell_from.x, move.cell_from.y
-                                         , move.cell_to.x, move.cell_to.y)
-                     for move in trail]
-                ), diff)
-
-                lesser = self.cmp_position(A.position, new_position)
-                if lesser==True:
-                    A.best_moves=trail
-                    A.position=new_position
-                    pos_str = "* " + pos_str
-                    self.log(pos_str)
-                    if self.drawing_ready:
-                        self._bg.draw_moves(self,trail)
-                        self.drawing_ready()
-                else:
-                    pos_str = "  " + pos_str
-                    self.log(pos_str)
-            else:
-                new_position=A.position
-
-            if len(trail)+1 < DEPTH:
-                new_moves = self.find_new_moves(new_position)
-                for new_move in new_moves:
-                    queue.append((new_move, new_position, trail+[new_move]))
-        return A.best_moves, A.position
-
     def comp_cand_mio(self, pos:position_c, cand:ddot):
         ccolors = collections.defaultdict(int)
         cmio = collections.defaultdict(int)
@@ -1795,9 +1728,15 @@ class Board:
         self.log("iteration: %d" % (self.iteration))
         # self._bg.update_graph(self)
         self.update_graph()
-        self.drawing_callback('after_throw')
+
+        if self.have_drawing_callback('after_throw'):
+            self.draw()
+            self.drawing_callback('after_throw')
+
         self.current_move = self.find_best_move()
-        self.drawing_callback('after_throw')
+        if self.have_drawing_callback('move_found'):
+            self.draw_move()
+            self.drawing_callback('move_found')
         return self.picked
 
     def drawing_callback(self,stage):
@@ -1817,15 +1756,22 @@ class Board:
     def history_post_load(self):
         print("iteration: %d" % (self.iteration))
         self.update_graph()
+        if self.have_drawing_callback('after_throw'):
+            self.draw()
+            self.drawing_callback('after_throw')
+
         # self._bg.update_graph(self)
         self.current_move = self.find_best_move()
+        if self.have_drawing_callback('move_found'):
+            self.draw_move()
+            self.drawing_callback('move_found')
         return self.picked
 
     def draw(self, show=False):
         self._bg.init_drawing(self._axes)
         self._bg.draw()
-        if show:
-            self._bg.show()
+        # if show:
+        #     self._bg.show()
 
     def draw_move(self):
         self._bg.init_drawing(self._axes)
@@ -1846,12 +1792,12 @@ class Board:
                 ts= self._tentative_scrubs
                 tentative_scrub_edges = [((ts[i].x, ts[i].y),(ts[i+1].x, ts[i+1].y)) for i in range(len(ts)-1)]
         self._bg.draw_move(self, f,t, start_edges, tentative_scrub_edges)
-        self._bg.show()
+        # self._bg.show()
 
     def draw_throw(self):
         self._bg.init_drawing(self._axes)
         self._bg.draw()
-        self._bg.show()
+        # self._bg.show()
 
     def get_cells_by_color(self,color):
         return self._color_list[color]

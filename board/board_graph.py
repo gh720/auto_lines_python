@@ -48,9 +48,9 @@ class Board_graph:
         plt.sca(axes)
         plt.cla()
 
-    def show(self,axes=None,block=None):
-        plt.sca(axes or self.axes)
-        plt.show(block=block)
+    # def show(self,axes=None,block=None):
+    #     plt.sca(axes or self.axes)
+    #     plt.show(block=block)
 
 
     def update_graph(self,board): # TODO: decouple
