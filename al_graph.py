@@ -71,7 +71,7 @@ def main():
         if nargs.max_free_moves!=None:
             board.max_free_moves=int(nargs.max_free_moves)
         if nargs.max_obstacle_moves != None:
-            board.max_obstacle_moves = int(nargs.max_obst_moves)
+            board.max_obstacle_moves = int(nargs.max_obstacle_moves)
         if history_file:
             load_history()
         else:
