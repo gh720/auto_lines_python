@@ -1040,11 +1040,11 @@ class connect_assessor_c:
         combinations=1
         rem_combinations=1
         for i in range(len(cut_count)):
-            if i>=len(self.DAG.nodes):
+            if i>=len(self.G.nodes):
                 break
-            combinations*=(len(self.DAG.nodes)-i)
+            combinations*=(len(self.G.nodes)-i)
             rem_combinations*=(i+1)
-            _prob =  cut_count[i]/combinations/rem_combinations
+            _prob =  cut_count[i]/combinations/rem_combinations # looks inaccurate, mb (rem_combinations-cut_count[i-1]
             prob+=_prob
             prob_rest-=_prob
             if not (prob >=0 and prob < 1):

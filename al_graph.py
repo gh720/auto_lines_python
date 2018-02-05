@@ -87,10 +87,14 @@ def main():
 
     def load_history():
         nonlocal board
-        with open(history_file, 'r') as fh:
-            jstr = fh.read()
-            history = json.loads(jstr)
-            board.set_history(history,iteration)
+        try:
+            with open(history_file, 'r') as fh:
+                jstr = fh.read()
+                history = json.loads(jstr)
+                board.set_history(history,iteration)
+        except FileNotFoundError:
+            if iteration!=None:
+                raise
 
 
     def on_click(event):

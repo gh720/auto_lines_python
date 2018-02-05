@@ -79,7 +79,9 @@ class Board_graph:
         FG = self.FG=G.copy()
         FG.remove_nodes_from(occupied)
 
-        self.metrics['lc']=nx.load_centrality(FG)
+        self.metrics['lc']=dict()
+        # self.metrics['lc']=nx.load_centrality(FG)
+
         # ap = list(nx.articulation_points(FG))
         # ap_dict = zip(ap,[1]*len(ap))
         # self.metrics['ap']=ap_dict
@@ -649,11 +651,11 @@ class Board_graph:
 
 
 
-    def assess_connection_wo_node(self, start, end, edges, max_cut=None):
+    def assess_connection_wo_node(self, start, end, max_cut=None):
         TG=self.FG.copy()
-        node_data=self.G.nodes[start]
-        TG.add_node(start, **node_data)
-        TG.add_edges_from(edges)
+        # node_data=self.G.nodes[start]
+        # TG.add_node(start, **node_data)
+        # TG.add_edges_from(edges)
         ca = connect_assessor_c(TG, self.G, self.OG, self.axes)
         try:
             path = nx.shortest_path(TG, start,end)
