@@ -19,6 +19,7 @@ def main():
     parser.add_argument("-l", "--log", help="log computation details")
     parser.add_argument("-mf", "--max_free_moves", help="max free moves to assess at each recursion")
     parser.add_argument("-mo", "--max_obstacle_moves", help="max obstacle removals to assess at each level of recursion")
+    parser.add_argument("-dh", "--debug_hqueue", help="diagnostics level for hqueue")
 
     nargs, args = parser.parse_known_args()
 
@@ -61,12 +62,14 @@ def main():
 
 
     def start():
-        nonlocal board
+        nonlocal board,nargs
         # G=make_graph()
         board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile
                      , drawing_callbacks= { stage: (drawing_callback if stage in stages_to_show else None)
                                             for stage in stages }
                      )
+        if nargs.debug_hqueue!=None:
+            board.set_debug_levels({'hqueue': int(nargs.debug_hqueue)})
         # board.draw(show=False)
         if nargs.max_free_moves!=None:
             board.max_free_moves=int(nargs.max_free_moves)
@@ -115,7 +118,7 @@ def main():
     figure = plt.figure(1,figsize=(6,6))
     main_ax = plt.subplot(111)
     thismanager = plt.get_current_fig_manager()
-    thismanager.window.wm_geometry("+600+0")
+    thismanager.window.wm_geometry("+660+0")
 
     # main_ax= plt.gca()
 

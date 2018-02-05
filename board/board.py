@@ -48,11 +48,13 @@ MOVE_FREE=0
 MOVE_OCCUPIED=1
 MOVE_BLOCKED=2
 MOVE_UNBLOCKING=3
+MOVE_UNBLOCKING_PASS=4
 
 LOGLEVEL_NONE=0
 LOGLEVEL_ERROR=1
 LOGLEVEL_INFO=2
 LOGLEVEL_DEBUG=3
+LOGLEVEL_4=4
 
 class position_c:
     id: int = 0
@@ -241,7 +243,7 @@ class Board:
     check_mio=True
     debug_repeat = True
     debug_moves=[
-        (4,2,3,5),
+        (8,1,5,3),
         # ((1, 8), (0, 4))
     ]
     # axes: x - left, y - up, directions enumerated anti-clockwise
@@ -273,6 +275,10 @@ class Board:
             wh = open(self._logfile, 'w')
             wh.close()
 
+
+    def set_debug_levels(self, debug):
+        if 'hqueue' in debug:
+            self.debug_hqueue=debug['hqueue']
 
     def reset(self):
         # COLORS=['Y','B','P','G','C','R','M']
@@ -537,6 +543,8 @@ class Board:
 
         scrubs=False
 
+        position_count=0
+
         while hqueue:
 
             _value, _, move,position,trail=heappop(hqueue)
@@ -548,18 +556,22 @@ class Board:
             worse = False
             if move!=None:
                 if move.real_mio==False: # rough value estimate, assess and put back on queue
+                    if max_value !=None and value[0] < max_value:
+                        continue
                     tt = tuple(sorted([ self.move_tuple(move) for move in trail ]))
                     if tt in seen_trails:
                         skipped+=1
                         continue
                     seen_trails[tt]=1
+
                     new_position,_scrubs = self.make_search_move(position, move)
+                    position_count+=1
                     if _scrubs:
                         move.scrubs=True
                         scrubs=True
                     if self.debug_hqueue>=LOGLEVEL_DEBUG:
                         pos_str = "<%d %s %s q:%s" % ((max_value or 0), value, ",".join(
-                            ["%s:%d,%d>%d,%d" % (move.color[0]
+                            ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
                                                  , move.cell_from.x, move.cell_from.y
                                                  , move.cell_to.x, move.cell_to.y)
                              for move in trail]
@@ -571,57 +583,59 @@ class Board:
                         move.real_mio = True
                         unique += 1
                         if self.debug_hqueue >= LOGLEVEL_DEBUG:
-                            pos_str = "#%d %s %s q:%s" % ((max_value or 0), value, ",".join(
-                                ["%s:%d,%d>%d,%d" % (move.color[0]
+                            pos_str = "#%d %s %s q:%s p:%s" % ((max_value or 0), value, ",".join(
+                                ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
                                                      , move.cell_from.x, move.cell_from.y
                                                      , move.cell_to.x, move.cell_to.y)
                                  for move in trail]
-                            ), len(hqueue))
+                            ), len(hqueue), position_count)
                             self.log(pos_str)
-
+                        move.move_type=MOVE_UNBLOCKING_PASS
                         heappush(hqueue, ((self.negate_tuple(value), -unique, move, new_position, trail)))
                     else:
                         diff = self.position_diff(original_position, new_position)
 
                         value = tuple(self.rel_value(diff, len(trail)))
-                        max_value=value[0] if max_value==None or value[0]>max_value else max_value
+                        if len(trail)>=DEPTH-1 or move.scrubs:
+                            max_value=value[0] if max_value==None or value[0]>max_value else max_value
                         move.real_mio=True
                         unique+=1
                         if self.debug_hqueue >= LOGLEVEL_DEBUG:
-                            pos_str = ">%d %s %s q:%s" % ((max_value or 0), value, ",".join(
-                                ["%s:%d,%d>%d,%d" % (move.color[0]
+                            pos_str = ">%d %s %s q:%s p:%s" % ((max_value or 0), value, ",".join(
+                                ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
                                                      , move.cell_from.x, move.cell_from.y
                                                      , move.cell_to.x, move.cell_to.y)
                                  for move in trail]
-                            ), len(hqueue))
+                            ), len(hqueue), position_count)
                             self.log(pos_str)
 
                         heappush(hqueue, ((self.negate_tuple(value), -unique, move, new_position, trail)))
                     continue
 
                 # move_changes[self.move_key(move)]=1
-                val1=self.rel_value(self.position_diff(original_position, A.position), len(A.best_moves))
-                val2=self.rel_value(self.position_diff(original_position, new_position), len(trail))
-                # worse = self.pos_is_lesser(A.position, new_position)
-                worse = val1 < val2
-                if worse==True:
-                    A.best_moves=trail
-                    A.position=new_position
-                    # pos_str = "* " + pos_str
-                    # self.log(pos_str)
-                    if self.have_drawing_callback('assessment'):
-                        self._bg.draw_moves(self,trail)
-                        self.drawing_callback('assessment')
+                if move.move_type!=MOVE_UNBLOCKING_PASS:
+                    val1=self.rel_value(self.position_diff(original_position, A.position), len(A.best_moves))
+                    val2=self.rel_value(self.position_diff(original_position, new_position), len(trail))
+                    # worse = self.pos_is_lesser(A.position, new_position)
+                    worse = val1 < val2
+                    if worse==True:
+                        A.best_moves=trail
+                        A.position=new_position
+                        # pos_str = "* " + pos_str
+                        # self.log(pos_str)
+                        if self.have_drawing_callback('assessment'):
+                            self._bg.draw_moves(self,trail)
+                            self.drawing_callback('assessment')
 
             # value = self.position_rel_value(original_position, new_position, len(trail))
-            pos_str = "%d: %s%s %s %s q:%s" % ((max_value or 0), [' ', '*'][worse]
+            pos_str = "%d: %s%s %s %s q:%s p:%s" % ((max_value or 0), [' ', '*'][worse]
                                       , [' ', 's'][bool(move) and move.scrubs]
                                       ,  value, ",".join(
-                ["%s:%d,%d>%d,%d" % ((original_position.cell(move.cell_from) or 'None')[0]
+                ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
                                      , move.cell_from.x, move.cell_from.y
                                      , move.cell_to.x, move.cell_to.y)
                  for move in trail]
-            ), len(hqueue))
+            ), len(hqueue), position_count)
 
             self.log(pos_str)
 
@@ -632,12 +646,12 @@ class Board:
                 if value[0] < max_value-1:
                     break  # not branching, because it's unlikely to yield higher results
 
-            if value!=None and (best_value == None or best_value < value[0]):
-                best_value = value[0]
-
-            if scrubs or len(trail)+1>=DEPTH:
-                if best_value > value[0]:
-                    break
+            # if value!=None and (best_value == None or best_value < value[0]):
+            #     best_value = value[0]
+            #
+            # if scrubs or len(trail)+1>=DEPTH:
+            #     if best_value > value[0]:
+            #         break
 
             if len(trail)+1 < DEPTH:
                 if value==None:
@@ -645,6 +659,7 @@ class Board:
                 new_moves = self.find_new_moves(new_position,trail)
                 for new_move in new_moves:
                     _trail=trail+[new_move]
+
                     if not len(value) == self._scrub_length * 2 + 2:
                         assert False
                     _diff=list(value[1:])
@@ -652,6 +667,15 @@ class Board:
                     diff=tuple(_diff)
                     estimate = self.rel_value(diff, len(_trail))
                     unique += 1
+                    if self.debug_hqueue >= LOGLEVEL_4:
+                        pos_str = ">> %s %s q:%s p:%s" % (estimate, ",".join(
+                            ["%s%s:%d,%d>%d,%d" % (move.color[0],move.move_type
+                                                 , move.cell_from.x, move.cell_from.y
+                                                 , move.cell_to.x, move.cell_to.y)
+                             for move in _trail]
+                        ), len(hqueue), position_count)
+                        self.log(pos_str)
+
                     heappush(hqueue, ((self.negate_tuple(estimate),-unique, new_move, new_position, _trail)))
 
         best_moves= self.rearrange(A.best_moves, original_position)
@@ -874,6 +898,8 @@ class Board:
         if last_i==None:
             value = [ -(len(diff)+steps), *diff ]
         else:
+            if last_i==0: # free_cell_count increase and mio_counts[0] increases actually mean the same: scrub
+                last_i=1
             value = [-(last_i + steps), *diff]
         return value
 
@@ -1013,7 +1039,9 @@ class Board:
         #         A.cand_colors.add(color)
         #
 
+        self._bg.lock=True
         best_moves, best_position = self.search_ahead()
+        self._bg.lock = False
 
         # self.color_assessment()
         # best_move = self.pick_best_move()
@@ -2039,7 +2067,7 @@ class Board:
             if self._tentative_scrubs:
                 ts= self._tentative_scrubs
                 tentative_scrub_edges = [((ts[i].x, ts[i].y),(ts[i+1].x, ts[i+1].y)) for i in range(len(ts)-1)]
-        self._bg.draw_move(self, f,t, start_edges, tentative_scrub_edges)
+        self._bg.draw_move(self, f,t, tentative_scrub_edges)
         # self._bg.show()
 
     def draw_throw(self):

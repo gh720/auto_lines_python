@@ -29,6 +29,7 @@ class Board_graph:
 
     def __init__(self, axes: object = None) -> None:
         self.axes=axes
+        self.lock=False
 
 
     # def make_graph(board):
@@ -154,15 +155,16 @@ class Board_graph:
             f=move.cell_from
             t=move.cell_to
             try:
-                FG = self.FG
+                FG = self.FG.copy()
                 start_node=f.x,f.y
                 end_node=t.x,t.y
-                node_data = self.G.nodes[start_node]
-                color = node_data['color']
-                FG.add_node(start_node, **node_data)
-                for nei_node in self.G[start_node]:
-                    if nei_node in self.FG:
-                        FG.add_edge(start_node, nei_node)
+                for node in [start_node,end_node]:
+                    node_data = self.G.nodes[node]
+                    color = node_data['color']
+                    FG.add_node(node, **node_data)
+                    for nei_node in self.G[node]:
+                        if nei_node in self.FG:
+                            FG.add_edge(node, nei_node)
                 path=nx.shortest_path(FG, tuple(f), tuple(t))
             except nx.NetworkXNoPath:
                 return False
@@ -195,17 +197,21 @@ class Board_graph:
         return True
 
 
-    def draw_move(self, board, f:ddot, t:dpos, start_edges, tentative_scrub_edges, chained=False):
+    def draw_move(self, board, f:ddot, t:dpos, tentative_scrub_edges, chained=False):
         FG=None
         if not f:
             return False
         try:
-            FG = self.FG
-            start_node=f.x,f.y
-            end_node=t.x,t.y
-            node_data = self.G.nodes[start_node]
-            FG.add_node(start_node, **node_data)
-            FG.add_edges_from(start_edges)
+            FG = self.FG.copy()
+            start_node = f.x, f.y
+            end_node = t.x, t.y
+            for node in [start_node, end_node]:
+                node_data = self.G.nodes[node]
+                color = node_data['color']
+                FG.add_node(node, **node_data)
+                for nei_node in self.G[node]:
+                    if nei_node in self.FG:
+                        FG.add_edge(node, nei_node)
             path=nx.shortest_path(FG, tuple(f), tuple(t))
         except nx.NetworkXNoPath:
             return False
@@ -676,9 +682,17 @@ class Board_graph:
         # ca.cycles_along_path(path, max_cut)
         return lc
 
-    def check_path(self, start:Tuple, end:Tuple) -> Optional[List]:
+    def check_path(self, start_node:Tuple, end_node:Tuple) -> Optional[List]:
         try:
-            path=nx.shortest_path(self.FG,start,end)
+            FG = self.FG.copy()
+            for node in [start_node]:
+                node_data = self.G.nodes[node]
+                color = node_data['color']
+                FG.add_node(node, **node_data)
+                for nei_node in self.G[node]:
+                    if nei_node in self.FG:
+                        FG.add_edge(node, nei_node)
+            path=nx.shortest_path(FG,start_node,end_node)
             return path
         except nx.NetworkXNoPath:
             pass
