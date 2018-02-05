@@ -80,8 +80,8 @@ class Board_graph:
         FG = self.FG=G.copy()
         FG.remove_nodes_from(occupied)
 
-        self.metrics['lc']=dict()
-        # self.metrics['lc']=nx.load_centrality(FG)
+        # self.metrics['lc']=dict()
+        self.metrics['lc']=nx.load_centrality(FG)
 
         # ap = list(nx.articulation_points(FG))
         # ap_dict = zip(ap,[1]*len(ap))

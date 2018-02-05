@@ -31,8 +31,10 @@ def main():
     free_cells =0
     logfile = nargs.log or None
 
-    stages = ('assessment', 'after_throw', 'move_found')
-    stages_to_show=('assessment', 'after_throw', 'move_found')
+    stages = ('assessment', 'after_throw', 'move_found', 'over')
+    stages_to_show=('assessment', 'after_throw', 'move_found', 'over')
+
+    game_over=False
 
     def next_move():
         nonlocal board
@@ -58,6 +60,8 @@ def main():
         if stage in stages:
             board.log("show: stage %s, I:%s" % (stage, ['off','on'][plt.isinteractive()]))
             plt.pause(0.001)
+            if stage=='over':
+                game_over=True
             # plt.show(block=False)
 
 
@@ -104,7 +108,8 @@ def main():
         # if event.click:
            # ax.plot((event.xdata, event.xdata), (mean-standardDeviation, mean+standardDeviation), 'r-')
         # import pdb;pdb.set_trace() # ddd
-        next_move()
+        if not game_over:
+            next_move()
         # G=make_graph()
         # draw()
 
