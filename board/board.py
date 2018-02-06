@@ -74,6 +74,7 @@ class position_c:
         self.free_cell_count = 0
         self.mio = dict()
         self.metrics=None
+        self.max_colors=None
         # self.mio_map = dict()
         if board:
             self.board=board
@@ -179,6 +180,9 @@ class position_c:
         # new_pos.mio_slist = copy.deepcopy(pos.mio_slist)
 
         return new_pos
+
+    def update_max_colors(self):
+        self.max_colors = max([ len(v) for k,v in self.color_list.items()],[0])
 
     def copy_(self):
         # assert isinstance(pos,cls)
@@ -495,7 +499,7 @@ class Board:
         pos = position_c(self)
         for ckey, cand in A.candidates.items():
             self.cand_mio(pos,cand)
-        self.update_pos_components(pos)
+        self.update_position(pos)
         return pos
 
     def dependent(self, move1:ddot, move2:ddot)->bool:
@@ -557,7 +561,7 @@ class Board:
             new_position = position
             worse = False
             if move!=None:
-                if move.real_mio==False: # rough value estimate, assess and put back on queue
+                if move.real_mio==None: # rough value estimate, assess and put back on queue
                     if max_value !=None and value[0] < max_value:
                         continue
                     tt = tuple(sorted([ self.move_tuple(move) for move in trail ]))
@@ -582,7 +586,7 @@ class Board:
 
                     if (move.move_type==MOVE_UNBLOCKING
                             and not move.scrubs and len(trail)+1 < DEPTH):
-                        move.real_mio = True
+                        move.real_mio = self._scrub_length
                         unique += 1
                         if self.debug_hqueue >= LOGLEVEL_DEBUG:
                             pos_str = "#%d %s %s q:%s p:%s" % ((max_value or 0), value, ",".join(
@@ -597,10 +601,10 @@ class Board:
                     else:
                         diff = self.position_diff(original_position, new_position)
 
-                        value = tuple(self.rel_value(diff, len(trail), trail))
+                        value,mio = tuple(self.rel_value(diff, len(trail), trail))
+                        move.real_mio=mio
                         if len(trail)>=DEPTH-1 or move.scrubs:
                             max_value=value[0] if max_value==None or value[0]>max_value else max_value
-                        move.real_mio=True
                         unique+=1
                         if self.debug_hqueue >= LOGLEVEL_DEBUG:
                             pos_str = ">%d %s %s q:%s p:%s" % ((max_value or 0), value, ",".join(
@@ -616,9 +620,9 @@ class Board:
 
                 # move_changes[self.move_key(move)]=1
                 if move.move_type!=MOVE_UNBLOCKING_PASS:
-                    val1=self.rel_value(self.position_diff(original_position, A.position), len(A.best_moves)
+                    val1,mio=self.rel_value(self.position_diff(original_position, A.position), len(A.best_moves)
                                         , A.best_moves)
-                    val2=self.rel_value(self.position_diff(original_position, new_position), len(trail)
+                    val2,mio=self.rel_value(self.position_diff(original_position, new_position), len(trail)
                                         , trail )
                     # worse = self.pos_is_lesser(A.position, new_position)
                     worse = val1 < val2
@@ -648,7 +652,11 @@ class Board:
 
             if max_value!=None:
                 if value[0] < max_value-1:
-                    break  # not branching, because it's unlikely to yield higher results
+                    break  # stopping because it's unlikely to yield higher results
+
+            if move:
+                if move.ccount >= len(position.color_list[move.color]):
+                    continue # not branching as there are not enough colors
 
             # if value!=None and (best_value == None or best_value < value[0]):
             #     best_value = value[0]
@@ -670,7 +678,7 @@ class Board:
                     _diff=list(value[2:])
                     _diff[new_move.new_mio+1] += 1
                     diff=tuple(_diff)
-                    estimate = self.rel_value(diff, len(_trail), _trail)
+                    estimate,mio = self.rel_value(diff, len(_trail), _trail)
                     unique += 1
                     if self.debug_hqueue >= LOGLEVEL_4:
                         pos_str = ">> %s %s q:%s p:%s" % (estimate, ",".join(
@@ -704,7 +712,7 @@ class Board:
             cps=[]
             position = original_position
             for i, index in enumerate(p):
-                self.update_pos_components(position)
+                self.update_position(position)
 
                 cell=moves[index].cell_to
                 if position.cell(cell)!=None:
@@ -907,12 +915,13 @@ class Board:
         else:
             comb_metric = -math.inf
         if last_i==None:
+            last_i=len(diff)
             value = [ -(len(diff)+steps), comb_metric, *diff ]
         else:
             if last_i==0: # free_cell_count increase and mio_counts[0] increases actually mean the same: scrub
                 last_i=1
-            value = [-(last_i + steps), comb_metric, *diff]
-        return value
+            value = [-((last_i-1) + steps), comb_metric, *diff]
+        return value, last_i-1
 
     def position_rel_value(self, pos1: position_c, pos2: position_c, steps:int=0):
         diff = self.position_diff(pos1,pos2)
@@ -1011,11 +1020,12 @@ class Board:
             if mio_counts != new_position.mio_counts:
                 assert False
 
-        self.update_pos_components(new_position)
+        self.update_position(new_position)
         # self.log("new pos mio: %s" % (new_position.mio_counts))
         return new_position, bool(scrubs)
 
-    def update_pos_components(self, position:position_c):
+    def update_position(self, position:position_c):
+        position.update_max_colors()
         self._pos_bg.update_graph(position)
         position.metrics=copy.deepcopy(self._pos_bg.metrics)
         position.component_map = self._pos_bg.get_components()
@@ -1158,14 +1168,14 @@ class Board:
             for cand_key, value in pos.mio.items():
                 for color, item in value.items():
                     mio,count,ccells=item
-                    mio_list.append((cand_key, color, mio))
+                    mio_list.append((cand_key, color, mio, count))
             mio_slist = sorted(mio_list, key=lambda v: v[2])
 
             # first_queue=[] # improvement expected
             # second_queue=[] # shuffling around, can be beneficial too
             _moves=[]
             for item in mio_slist: # every candidate,color, highest mio first
-                cand_key, color, mio=item
+                cand_key, color, mio, count=item
                 # mio=pos.mio[cand_key]
                 cand = A.candidates[cand_key]
                 cells=cand.cells
@@ -1192,9 +1202,9 @@ class Board:
                                 exp_mio=mio
 
                             move = ddot(cell_from=ccell, cell_to=cell, color=color
-                                        , new_mio=exp_mio, real_mio=False, move_type=MOVE_FREE, scrubs=False
-                                        , metric=0
-                                        , total_gain=0, gain_detail=dict())
+                                        , new_mio=exp_mio, real_mio=None, ccount=count+1
+                                        , move_type=MOVE_FREE, scrubs=False
+                                        , metric=0, total_gain=0, gain_detail=dict())
 
                             path_exists, cross = self.move_check(pos, move)
                             if path_exists:
@@ -1259,7 +1269,8 @@ class Board:
                                 # move_map[obcell][cell]=1
                                 mio=max(_mio-1,move_mio)
                                 move = ddot(cell_from=obcell, cell_to=cell, color=obcolor
-                                            , new_mio=exp_mio, real_mio=False, move_type=MOVE_UNBLOCKING
+                                            , new_mio=exp_mio, real_mio=None, ccount=0
+                                            , move_type=MOVE_UNBLOCKING
                                             , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
                                 path_exists, cross = self.move_check(pos, move)
                                 if path_exists:
@@ -1271,7 +1282,8 @@ class Board:
                 for fcell in pos.free_cells:
                     exp_mio=4
                     move = ddot(cell_from=obcell, cell_to=fcell, color=obcolor
-                                , new_mio=exp_mio, real_mio=False, move_type=MOVE_UNBLOCKING
+                                , new_mio=exp_mio, real_mio=None, ccount=0
+                                , move_type=MOVE_UNBLOCKING
                                 , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
                     path_exists, cross = self.move_check(pos, move)
                     if path_exists:

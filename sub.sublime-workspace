@@ -523,7 +523,7 @@
 			"file": "board/board.py",
 			"settings":
 			{
-				"buffer_size": 22073,
+				"buffer_size": 87663,
 				"line_ending": "Windows"
 			}
 		},
@@ -531,7 +531,7 @@
 			"file": "al_graph.py",
 			"settings":
 			{
-				"buffer_size": 2960,
+				"buffer_size": 4569,
 				"line_ending": "Windows"
 			}
 		},
@@ -539,7 +539,7 @@
 			"file": "board/board_graph.py",
 			"settings":
 			{
-				"buffer_size": 20886,
+				"buffer_size": 24443,
 				"line_ending": "Windows"
 			}
 		},
@@ -547,7 +547,7 @@
 			"file": "board/connect_assess.py",
 			"settings":
 			{
-				"buffer_size": 43253,
+				"buffer_size": 43079,
 				"line_ending": "Windows"
 			}
 		},
@@ -579,7 +579,7 @@
 			"file": "board/utils.py",
 			"settings":
 			{
-				"buffer_size": 2977,
+				"buffer_size": 3504,
 				"line_ending": "Windows"
 			}
 		}
@@ -726,6 +726,7 @@
 	],
 	"file_history":
 	[
+		"/E/work/devel/android/rev/colorlines/Color Lines Automatic_v3.3.19052017_apkpure.com-dex2jar.jar.src/com/autoline98/lite/AutoPlayer.java",
 		"/E/work/devel/python3/projects/al/scratch/s4.py",
 		"/E/work/devel/python3/projects/al/scratch/s2.py",
 		"/E/work/devel/python3/jupyter/notebooks/t2.py",
@@ -852,8 +853,7 @@
 		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/widget/WidgetUpdateService.java",
 		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/widget/WidgetConfig.java",
 		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/ui/Fragment_Overview.java",
-		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/widget/DashClock.java",
-		"/E/work/github/android/opensource_gplay/Pedometer/src/main/res/layout/widget.xml"
+		"/E/work/github/android/opensource_gplay/Pedometer/src/main/java/de/j4velin/pedometer/widget/DashClock.java"
 	],
 	"find":
 	{
@@ -1032,7 +1032,7 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 22073,
+						"buffer_size": 87663,
 						"regions":
 						{
 						},
@@ -1062,7 +1062,7 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2960,
+						"buffer_size": 4569,
 						"regions":
 						{
 						},
@@ -1092,7 +1092,7 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 20886,
+						"buffer_size": 24443,
 						"regions":
 						{
 						},
@@ -1122,7 +1122,7 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 43253,
+						"buffer_size": 43079,
 						"regions":
 						{
 						},
@@ -1160,8 +1160,8 @@
 						"selection":
 						[
 							[
-								479,
-								479
+								152,
+								152
 							]
 						],
 						"settings":
@@ -1241,7 +1241,7 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2977,
+						"buffer_size": 3504,
 						"regions":
 						{
 						},
