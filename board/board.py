@@ -10,6 +10,7 @@ import pickle
 import base64
 import itertools
 import math
+import re
 
 from typing import List, Set, Dict, Tuple, Text, Optional, AnyStr
 
@@ -55,6 +56,16 @@ LOGLEVEL_ERROR=1
 LOGLEVEL_INFO=2
 LOGLEVEL_DEBUG=3
 LOGLEVEL_4=4
+
+
+class cutset_c:
+    def __init__(self,start,end,blocks, max=None):
+        self.start=start
+        self.end=end
+        self.blocks=blocks
+        self.cutsets = []
+        self.MAX_CUTSET=max if max!=None else 3
+
 
 class position_c:
     id: int = 0
@@ -947,6 +958,203 @@ class Board:
         val2 = (pos2.free_cell_count, *self.position_value(pos2))
 
         return val1<val2
+
+    def shortest_path(self,cells_from:Dict[dpos,int],cells_to:Dict[dpos,int],blocks:Dict[dpos,int]):
+        queue=deque()
+        seen = dict()
+        assert not (set(cells_from)&set(cells_to))
+        for cell in cells_from:
+            queue.append([cell])
+            # seen.setdefault(cell, len(seen))
+        while queue:
+            path = queue.popleft()
+            cell = path[-1]
+            assert isinstance(cell, dpos)
+            if len(seen) != seen.setdefault(cell, len(seen)):
+                continue
+            neis = self.free_adj_cells(cell) # MAYBE: exclude=path[-1] to speed up
+            for nei in neis:
+                if nei in blocks:
+                    continue
+                if nei in cells_to:
+                    return path+[nei], seen
+                if nei in seen:
+                    continue
+                queue.append(path+[nei])
+        return [], seen
+
+    def shortest_path2(self,cells_from:Dict[dpos,int]
+                       ,cells_to:Dict[dpos,int]
+                       ,blocks:Dict[dpos,int]
+                       ,seen:Dict[dpos,int]
+                       ):
+        queue=deque()
+        # seen = dict()
+        assert not (set(cells_from)&set(cells_to))
+        for cell in cells_from:
+            queue.append([cell])
+            # seen.setdefault(cell, len(seen))
+        while queue:
+            path = queue.popleft()
+            cell = path[-1]
+            assert isinstance(cell, dpos)
+            if len(seen) != seen.setdefault(cell, len(seen)):
+                continue
+            neis = self.free_adj_cells(cell) # MAYBE: exclude=path[-1] to speed up
+            for nei in neis:
+                if nei in blocks:
+                    continue
+                if nei in cells_to:
+                    return path+[nei], seen
+                if nei in seen:
+                    continue
+                queue.append(path+[nei])
+        return [], seen
+
+
+    def init_test_graph(self, text):
+        if not text:
+            text='''
+            . y . . . r . . .
+            r . . . . . . . p
+            . y . p . . y y m
+            c . r . . . . p .
+            g b . p . . m . r
+            . m . . . b . . .
+            . . y . . . . c .
+            . . . g . b . . .
+            . . . . . g r . .
+            '''
+        for i, str in enumerate(filter(lambda v: v!="", re.split("\r?\n", text))):
+            for j, cc in enumerate(str.replace(' ','')):
+                color = {k:v for k,v in map(lambda v: (v[0],v), self._colors)}.get(cc)
+                self._array[j][self._size-i-1]=color
+
+    def dumps_test_graph(self):
+        out='\n'
+        for j in range(len(self._array)-1,-1,-1):
+            line=' '.join([(self._array[i][j] or '.')[0] for i in range(len(self._array))])
+            out=out+line+'\n'
+        return out
+
+
+    def cutoff(self, cell):
+        neis=self.free_adj_cells(cell)
+        # for i in range(len(neis)):
+        #     for j in range(i+1,len(neis)):
+        #         if not (abs(neis[i].x-neis[j].x)==2 or abs(neis[i].y-neis[j].y)==2):
+        #             continue
+
+        cs = cutset_c(neis[1],neis[3],blocks={cell:0})
+        self.cut_rec(cs, cs.start, cs.end, cs.blocks)
+        return cs
+
+    def cutoff2(self, cell):
+        neis=self.free_adj_cells(cell)
+        # for i in range(len(neis)):
+        #     for j in range(i+1,len(neis)):
+        #         if not (abs(neis[i].x-neis[j].x)==2 or abs(neis[i].y-neis[j].y)==2):
+        #             continue
+
+        cs = cutset_c(neis[1],neis[3],blocks={cell:0})
+        self.cut_rec2(cs, cs.start, cs.end, cs.blocks, dict())
+        return cs
+
+
+    def cut_rec(self,cs:cutset_c, start,end,blocks):
+        path, seen = self.shortest_path({start:0}, {end:0}, blocks)
+        # print("trying: %s"% ([ tuple(v) for v in blocks]))
+        if not path:
+            cs.cutsets.append(blocks)
+        elif len(blocks)< cs.MAX_CUTSET:
+            for i in range(1,len(path)-1):
+                block=path[i]
+                start=path[i-1]
+                _blocks={ **blocks, **{block:len(blocks)} }
+                self.cut_rec(cs, start, end, _blocks)
+
+    def cut_rec2(self,cs:cutset_c, start,end,blocks, comp):
+        path, path_comp = self.shortest_path2({start:0}, {end:0}, blocks, { **comp } )
+        _blocks=blocks
+        # print("trying: %s"% ([ tuple(v) for v in blocks]))
+        if not path:
+            cs.cutsets.append(blocks)
+            return path_comp
+        elif len(blocks)< cs.MAX_CUTSET:
+            current_comp = { **comp }
+            for i in range(1,len(path)-1):
+                block=path[i]
+                start=path[i-1]
+                _blocks={ **blocks, **{block:len(blocks)} }
+                _comp = self.cut_rec2(cs, start, end, _blocks, current_comp)
+                if _comp:
+                    current_comp=_comp
+            return dict()
+        return dict()
+
+    def cutoff_these(self, nei1, nei2, blocks=dict()):
+        path=[]
+
+        queue=deque()
+        while queue:
+            path,comp1,comp2 = queue.popleft()
+            for i, node in enumerate(path):
+
+                path, seen = self.shortest_path( node
+                                                , { node: 1 for node in path[i+1:]}
+                                                , { **blocks, node:len(blocks)})
+                if not path:
+                    comp1.update(seen)
+                    if not comp2:
+                        _, comp2 = self.shortest_path({ node: 1 for node in path[i+1:]}
+                                                      , { node: 1 for node in path[:i]}
+                                                      , blocks)
+                    else:
+                        all(map(lambda k: comp2.pop(k,None), blocks))
+                else:
+                    pass
+                _blocks = {k: v for k, v in blocks.items()}
+                _blocks[node] = len(_blocks)
+                queue.append((_blocks,comp1,comp2))
+
+
+    def cutoff_these_(self, nei1, nei2, max_cutoff_len=3, blocks=dict()):
+        queue = deque([blocks])
+        min_cutoff_len=None
+        cutoffs=[]
+        while queue:
+            blocks,comp1,comp2 = queue.popleft()
+            path,seen = self.shortest_path({nei1:0}, {nei2:0}, blocks)
+            if not path:
+                if min_cutoff_len==None or len(blocks) < min_cutoff_len:
+                    min_cutoff_len=len(blocks)
+                if len(blocks)<=max_cutoff_len:
+                    cutoffs.append(blocks)
+                cut_comp1 = { **cut_comp1, **seen }
+                if not cut_comp2:
+                    _, cut_comp2 = self.shortest_path({nei2: 0}, {nei1: 0}, blocks)
+                else:
+                    all(map(cut_comp2.pop, cut_comp1))
+
+            else:
+                for i, node in enumerate(path):
+
+                    path, seen = self.shortest_path({ node: 1 for node in path[:i]}
+                                                    , { node: 1 for node in path[i+1:]}
+                                                    , { **blocks, node:len(blocks)})
+                    if not path:
+                        comp1=seen
+                        if not cut_comp2:
+                            _, cut_comp2 = self.shortest_path({nei2: 0}, {nei1: 0}, blocks)
+                        else:
+                            all(map(cut_comp2.pop, cut_comp1))
+                    else:
+                        pass
+                    _blocks = {k: v for k, v in blocks.items()}
+                    _blocks[node] = len(_blocks)
+                    queue.append((_blocks,comp1,comp2))
+
+        return cutoffs
 
     def cmp_cmio_map(self, map1, map2):
         diffs=list()
@@ -1882,7 +2090,7 @@ class Board:
         adj_free = self.free_adj_cells(move.pos_from)
         start_edges= [ (start_node, tuple(adj) ) for adj in adj_free]
         if not self.fake_prob:
-            ca = self._bg.assess_connection_wo_node(start_node, end_node, start_edges, max_cut=3)
+            ca = self._bg.assess_connection_wo_node(start_node, end_node, max_cut=3)
             if ca==None:
                 cut_prob=None
             else:

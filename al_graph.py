@@ -56,6 +56,8 @@ def main():
     # def draw():
     #     board.draw_move()
 
+
+
     def drawing_callback(stage):
         if stage in stages:
             board.log("show: stage %s, I:%s" % (stage, ['off','on'][plt.isinteractive()]))
