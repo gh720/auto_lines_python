@@ -217,10 +217,12 @@ class position_c:
 
 
     def check_disc(self,cell):
-        bi_comps = self.bi_component_map[tuple(cell)]
+        total_disc_size = 0
+        total_possible_disc_size = 0
+        bi_comps = self.bi_component_map.get(tuple(cell))
+        if not bi_comps:
+            return total_disc_size,total_possible_disc_size
         comps=[]
-        total_disc_size=0
-        total_possible_disc_size=0
 
         if len(bi_comps) > 1:  # cut point
             neis = self.free_adj_cells(cell)

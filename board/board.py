@@ -482,9 +482,9 @@ class Board:
 
                 # move_changes[self.move_key(move)]=1
                 if move.move_type!=MOVE_UNBLOCKING_PASS:
-                    val1,mio=self.rel_value(self.position_diff(original_position, A.position), len(A.best_moves)
+                    val1,mio=self.gain_value(self.position_diff(original_position, A.position), len(A.best_moves)
                                         , A.best_moves)
-                    val2,mio=self.rel_value(self.position_diff(original_position, new_position), len(trail)
+                    val2,mio=self.gain_value(self.position_diff(original_position, new_position), len(trail)
                                         , trail )
                     # worse = self.pos_is_lesser(A.position, new_position)
                     worse = val1 < val2
@@ -496,18 +496,29 @@ class Board:
                         if self.have_drawing_callback('assessment'):
                             self._bg.draw_moves(self,trail)
                             self.drawing_callback('assessment')
+                        pos_str = "%d: %s%s %s %s q:%s p:%s" % ((max_value or 0), [' ', '*'][worse]
+                                                                , [' ', 's'][bool(move) and move.scrubs]
+                                                                , val2, ",".join(
+                            ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
+                                                   , move.cell_from.x, move.cell_from.y
+                                                   , move.cell_to.x, move.cell_to.y)
+                             for move in trail]
+                        ), len(hqueue), position_count)
+
+                        self.log(pos_str)
 
             # value = self.position_rel_value(original_position, new_position, len(trail))
-            pos_str = "%d: %s%s %s %s q:%s p:%s" % ((max_value or 0), [' ', '*'][worse]
-                                      , [' ', 's'][bool(move) and move.scrubs]
-                                      ,  value, ",".join(
-                ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
-                                     , move.cell_from.x, move.cell_from.y
-                                     , move.cell_to.x, move.cell_to.y)
-                 for move in trail]
-            ), len(hqueue), position_count)
+            if not worse:
+                pos_str = "%d: %s%s %s %s q:%s p:%s" % ((max_value or 0), [' ', '*'][worse]
+                                          , [' ', 's'][bool(move) and move.scrubs]
+                                          ,  value, ",".join(
+                    ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
+                                         , move.cell_from.x, move.cell_from.y
+                                         , move.cell_to.x, move.cell_to.y)
+                     for move in trail]
+                ), len(hqueue), position_count)
 
-            self.log(pos_str)
+                self.log(pos_str)
 
             if move and move.scrubs: # not branching after a goal reached
                 continue
@@ -779,11 +790,34 @@ class Board:
             comb_metric = -math.inf
         if last_i==None:
             last_i=len(diff)
-            value = [ -(len(diff)+steps), comb_metric, *diff ]
+            value = [ -(len(diff)+steps), -comb_metric, *diff ]
         else:
             if last_i==0: # free_cell_count increase and mio_counts[0] increases actually mean the same: scrub
                 last_i=1
-            value = [-((last_i-1) + steps), comb_metric, *diff]
+            value = [-((last_i-1) + steps), -comb_metric, *diff]
+        return value, last_i-1
+
+    def gain_value(self, diff, steps:int, trail:List[ddot]):
+        assert len(diff)==self._scrub_length*2 +1
+        v=0
+        last_i=None
+        for i in range(0, len(diff)):
+            v+=sign(diff[i])
+            if v>0:
+                last_i=i
+                break
+
+        if trail:
+            comb_metric = round(sum([move.metric for move in trail]) * max([move.metric for move in trail]),4)
+        else:
+            comb_metric = -math.inf
+        if last_i==None:
+            last_i=len(diff)
+            value = [ -(len(diff)), -steps,  -comb_metric, *diff ]
+        else:
+            if last_i==0: # free_cell_count increase and mio_counts[0] increases actually mean the same: scrub
+                last_i=1
+            value = [-((last_i-1)), -steps, -comb_metric, *diff]
         return value, last_i-1
 
     def position_rel_value(self, pos1: position_c, pos2: position_c, steps:int=0):
@@ -1099,10 +1133,22 @@ class Board:
         def obst_move_loop():
             counter=0
             _moves=[]
+            move_map=dict()
+
+            move_keys = dict()
 
             for obcell,moves in obstacles.items(): # every obstacle
                 if trail and obcell == trail[-1].cell_to:
                     continue
+
+                move_mio=max([ move.new_mio for move in moves ])-1
+                tgt_set=set()
+                tgt_keys=[]
+                for move in moves:
+                    for ckey in move.cand_keys:
+                        if not ckey in tgt_set:
+                            tgt_set.add(ckey)
+                            tgt_keys.append(ckey)
 
                 # move_map.setdefault(obcell,dict())
                 obcolor = pos.cell(obcell)
@@ -1122,43 +1168,43 @@ class Board:
                         _mio,count,cc_cells=cmio[obcolor]
                         cells=cand.cells
                         for cell in cells:   # for candidate : every free cell
-                            for move in moves:
-                                # move_mio=max([ move.new_mio for move in moves ])-1
-                                move_mio = move.new_mio - 1
-                                tgt_keys = move.cand_keys
-                                    # tgt_keys = list({ ckey for move in moves for ckey in move.cand_keys })
+                            if cell==obcell:
+                                continue
 
-                                # if cell in move_map[obcell]:
-                                #     continue
-                                exp_mio = _mio-1
-                                if cell in cc_cells:
-                                    exp_mio = _mio
-                                if pos.cell(cell)==None:
-                                    # move_map[obcell][cell]=1
-                                    mio=max(_mio-1,move_mio)
-                                    move = ddot(cell_from=obcell, cell_to=cell, color=obcolor
-                                                , new_mio=exp_mio, real_mio=None, ccount=0
-                                                , move_type=MOVE_UNBLOCKING
-                                                , cand_keys = tgt_keys
-                                                , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
-                                    path_exists, cross = self.move_check(pos, move)
-                                    if path_exists:
-                                        move.metric = pos.metrics['lc'][tuple(move.cell_to)]
-                                        _moves.append((exp_mio, len(_moves), move))
-                                        dispatched = True
-                    if dispatched:
-                        continue
-                    for fcell in pos.free_cells:
-                        exp_mio=4
-                        move = ddot(cell_from=obcell, cell_to=fcell, color=obcolor
-                                    , new_mio=exp_mio, real_mio=None, ccount=0
-                                    , move_type=MOVE_UNBLOCKING
-                                    , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
-                        path_exists, cross = self.move_check(pos, move)
-                        if path_exists:
-                            move.metric = 0 # pos.metrics['lc'][tuple(move.cell_to)]
-                            _moves.append((exp_mio, len(_moves), move))
-                            dispatched = True
+                            exp_mio = _mio-1
+                            if cell in cc_cells:
+                                exp_mio = _mio
+                            if pos.cell(cell)==None:
+                                move_tuple = (obcell, cell, tuple(tgt_keys))
+                                if move_tuple in move_map:
+                                    continue
+                                move_map[move_tuple]=1
+
+                                mio=max(_mio-1,move_mio)
+                                move = ddot(cell_from=obcell, cell_to=cell, color=obcolor
+                                            , new_mio=exp_mio, real_mio=None, ccount=0
+                                            , move_type=MOVE_UNBLOCKING
+                                            , cand_keys = tgt_keys
+                                            , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
+                                path_exists, cross = self.move_check(pos, move)
+                                if path_exists:
+                                    move.metric = 0 # pos.metrics['lc'][tuple(move.cell_to)]
+                                    _moves.append((exp_mio, len(_moves), move))
+                                    dispatched = True
+                if dispatched:
+                    continue
+                for fcell in pos.free_cells:
+                    exp_mio=4
+                    move = ddot(cell_from=obcell, cell_to=fcell, color=obcolor
+                                , new_mio=exp_mio, real_mio=None, ccount=0
+                                , move_type=MOVE_UNBLOCKING
+                                , cand_keys=tgt_keys
+                                , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
+                    path_exists, cross = self.move_check(pos, move)
+                    if path_exists:
+                        move.metric = 0 # pos.metrics['lc'][tuple(move.cell_to)]
+                        _moves.append((exp_mio, len(_moves), move))
+                        dispatched = True
 
             move_map = dict()
 
@@ -1474,17 +1520,17 @@ class Board:
 
 
     def move_check(self, pos:position_c, move:ddot):
-        A = self._assessment
-        cand_color=move.color
-        move_key= self.move_key(move)
-        if move_key in A.move_map:
-            return
-        if move_key in A.no_path_map:
-            return
-
-        gd = ddot(gain=0, loss=0, cand_cost=0, added_gain=0, src_gain=0, src_loss=0
-                               , tgt_gain=0, tgt_loss=0, ob_block_cost=0
-                               , lc=0, cut_prob=0)
+        # A = self._assessment
+        # cand_color=move.color
+        # move_key= self.move_key(move)
+        # if move_key in A.move_map:
+        #     return
+        # if move_key in A.no_path_map:
+        #     return
+        #
+        # gd = ddot(gain=0, loss=0, cand_cost=0, added_gain=0, src_gain=0, src_loss=0
+        #                        , tgt_gain=0, tgt_loss=0, ob_block_cost=0
+        #                        , lc=0, cut_prob=0)
 
         path_exists, cross = self.check_pos_path_across(pos, move.cell_from, move.cell_to)
         return path_exists, cross
