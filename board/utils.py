@@ -55,6 +55,22 @@ def prev_i_in_loop(array,i):
 def sign(v):
     return -(v<0) or +(v>0)
 
+# probability of taking one of m items out of a set of n items in c tries
+def prob_3(m, n, c):
+    if n<=m:
+        return 1
+    if m<=0:
+        return 0
+
+    prob_yes=0
+    prob_no=1
+    for i in range(0,c):
+        prob_no=prob_no * (n-m-i)/(n-i)
+        if prob_no==0:
+            break
+    return 1-prob_no
+
+
 # def clear():
 #     subprocess.check_call('cls', shell=True)
 

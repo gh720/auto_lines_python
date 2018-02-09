@@ -78,25 +78,13 @@ class test_4_cutoff(unittest.TestCase):
         cs = b.cutoff(dpos(4, 5))
         return
 
-    # def bench1(self):
-    #     self.setUp(t.text0)
-    #     b = self.board
-    #     start = dpos(4,6)
-    #     block = dpos(4,5)
-    #     end = dpos(4,4)
-    #     b.fill_cell(block, 'magenta')
-    #     b.update_graph()
-    #
-    #     def test_ca():
-    #         b._bg.assess_connection_wo_node(tuple(start), tuple(end), max_cut=3)
-    #
-    #     def test_cs():
-    #         cs = b.cutoff(dpos(4, 5))
-    #
-    #     r1 = timeit.repeat(test_ca, repeat=1, number=500)
-    #     r2 = timeit.repeat(test_cs,repeat=1,number=500)
-    #     print(r1,r2)
-    #     return
+    def test_cut_prob3(self):
+        b = self.board
+        total_disc_size, total_possible_disc_size = b.check_disc(dpos(3,3))
+        # print(b.dumps_test_graph())
+        # cs = b.cutoff(dpos(4, 5))
+        return
+
 
     def bench0_setup(self):
         self.setUp(t.text0)
@@ -113,7 +101,7 @@ class test_4_cutoff(unittest.TestCase):
         self.start = dpos(4,6)
         self.block = dpos(4,5)
         self.end = dpos(4,4)
-        b.fill_cell(self.block, 'magenta')
+        # b.fill_cell(self.block, 'magenta')
         b.update_graph()
 
     def bench2_setup(self):
@@ -124,6 +112,14 @@ class test_4_cutoff(unittest.TestCase):
         self.end = dpos(4, 4)
         b.fill_cell(self.block, 'magenta')
         b.update_graph()
+
+    def bench3_setup(self):
+        self.setUp(t.text0)
+        b = self.board
+        self.block = dpos(4,4)
+        # b.fill_cell(self.block, 'magenta')
+        b.update_graph()
+
 
     def bench1(self):
         def test_ca():
@@ -164,7 +160,7 @@ class test_4_cutoff(unittest.TestCase):
 
 if __name__=='__main__':
     t = test_4_cutoff()
-    t.bench1_setup()
-    t.bench2()
+    t.bench3_setup()
+    t.test_cut_prob3()
 
 

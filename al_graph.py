@@ -20,6 +20,7 @@ def main():
     parser.add_argument("-mf", "--max_free_moves", help="max free moves to assess at each recursion")
     parser.add_argument("-mo", "--max_obstacle_moves", help="max obstacle removals to assess at each level of recursion")
     parser.add_argument("-dh", "--debug_hqueue", help="diagnostics level for hqueue")
+    parser.add_argument("-a", "--auto", help="play next N moves automatically, 0 - infinitely")
 
     nargs, args = parser.parse_known_args()
 
@@ -35,6 +36,7 @@ def main():
     stages_to_show=('assessment', 'after_throw', 'move_found', 'over')
 
     game_over=False
+    auto_play_moves=int(nargs.auto) if nargs.auto!=None else None
 
     def next_move():
         nonlocal board
@@ -68,7 +70,7 @@ def main():
 
 
     def start():
-        nonlocal board,nargs
+        nonlocal board,nargs,auto_play_moves
         # G=make_graph()
         board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile
                      , drawing_callbacks= { stage: (drawing_callback if stage in stages_to_show else None)
@@ -85,6 +87,20 @@ def main():
             load_history()
         else:
             picked=next_move()
+
+        while not game_over:
+            plt.pause(0.001)
+            if nargs.auto==None:
+                break
+            if not nargs.auto=='0':
+                auto_play_moves-=1
+                if auto_play_moves <=0:
+                    break
+            picked = next_move()
+
+
+
+
         # draw()
 
     def save_history():
@@ -107,11 +123,20 @@ def main():
 
 
     def on_click(event):
+        nonlocal auto_play_moves,nargs
         # if event.click:
            # ax.plot((event.xdata, event.xdata), (mean-standardDeviation, mean+standardDeviation), 'r-')
         # import pdb;pdb.set_trace() # ddd
-        if not game_over:
-            next_move()
+        while not game_over:
+            plt.pause(0.001)
+            picked = next_move()
+            if nargs.auto==None:
+                break
+            if not nargs.auto=='0':
+                auto_play_moves-=1
+                if auto_play_moves <=0:
+                    break
+
         # G=make_graph()
         # draw()
 

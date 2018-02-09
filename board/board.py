@@ -17,6 +17,7 @@ from typing import List, Set, Dict, Tuple, Text, Optional, AnyStr
 from .utils import ddot,dpos,ddir,sign
 from .board_graph import Board_graph
 from .connect_assess import connect_assessor_c
+from .position import position_c
 
 
 '''
@@ -56,161 +57,6 @@ LOGLEVEL_ERROR=1
 LOGLEVEL_INFO=2
 LOGLEVEL_DEBUG=3
 LOGLEVEL_4=4
-
-
-class cutset_c:
-    def __init__(self,start,end,blocks, max=None):
-        self.start=start
-        self.end=end
-        self.blocks=blocks
-        self.cutsets = []
-        self.MAX_CUTSET=max if max!=None else 3
-
-
-class position_c:
-    id: int = 0
-    array:List[List[str]]
-    free_cells:Dict[dpos,object]
-    free_cell_count:int
-    mio_counts:List[int]
-    mio : Dict[Tuple[dpos,ddir],object]
-    color_list:Dict[dpos,str]
-    board:object
-    # mio_map: Dict[dpos,Dict[Tuple[dpos,ddir],object]]
-
-
-    def __init__(self, board=None):
-        self.id=0
-        self.free_cells = dict()
-        self.free_cell_count = 0
-        self.mio = dict()
-        self.metrics=None
-        self.max_colors=None
-        # self.mio_map = dict()
-        if board:
-            self.board=board
-            self.array=copy.deepcopy(board._array)
-            self.find_free_cells()
-            self.free_cell_count = len(self.free_cells)
-            # self.mio_counts = board.evaluation()
-            self.mio_counts,cmio_map = board.pos_evaluation(self)
-            # if self.mio_counts!=mio_counts:
-            #     assert False
-            self.color_list = copy.deepcopy(board._color_list)
-
-        else:
-            self.color_list = None
-            self.mio_counts = None
-
-
-        # self.mio_slist=SortedListWithKey(key=lambda v: -v[2]) # sorted by -move_in_out
-
-    def get_array(self):
-        return self.array
-
-    def get_size(self):
-        return len(self.array)
-
-    def find_free_cells(self):
-        for i, ar in enumerate(self.array):
-            for j, color in enumerate(ar):
-                if color==None:
-                    self.free_cells[dpos(i,j)]=1
-        return
-
-    def cell(self, cell:dpos)->str:
-        return self.array[cell.x][cell.y]
-
-
-    def clear_mio(self, cell:dpos):
-        ckeys = self.board._assessment.cand_cell_map[cell]
-        for ckey in ckeys:
-            del self.mio[ckey]
-
-        # ckeys = self.mio_map[cell]
-        # for ckey in ckeys:
-        #     del self.mio[ckey]
-        # del self.mio_map[cell]
-
-    def free_cell(self,cell:dpos, color:str=None):
-        _color = self.array[cell.x][cell.y]
-        if color:
-            assert _color ==color
-        self.array[cell.x][cell.y]=None
-        self.free_cell_count+=1
-        assert cell !=None
-        assert cell not in self.free_cells
-        self.free_cells[cell]=1
-        # self.mio_counts # taken care of in update_when_xxx
-        del self.color_list[_color][cell]
-        self.clear_mio(cell)
-        return _color
-
-
-    def fill_cell(self,cell:dpos, color:str):
-        assert cell!=None
-        assert self.array[cell.x][cell.y] == None
-        self.array[cell.x][cell.y] = color
-        self.free_cell_count-=1
-        assert cell in self.free_cells
-        del self.free_cells[cell]
-        self.color_list.setdefault(color, dict())[cell] = 1
-        self.clear_mio(cell)
-
-    def copy(self):
-        # assert isinstance(pos,cls)
-        pos=self
-        new_pos = position_c()
-        position_c.id +=1
-        new_pos.id=position_c.id
-        new_pos.board=self.board
-        new_pos.mio=dict()
-        new_pos.color_list=dict()
-
-        new_pos.array = [
-            [None for i in range(0, self.board._size)]
-            for j in range(0, self.board._size)
-        ]
-
-        for i,ar in enumerate(pos.array):
-            for j,color in enumerate(ar):
-                new_pos.array[i][j]=color
-                cell = dpos(i, j)
-                if color ==None:
-                    new_pos.free_cells[cell]=1
-                else:
-                    new_pos.color_list.setdefault(color, dict())[cell] = 1
-        new_pos.free_cell_count=pos.free_cell_count
-
-        for ckey in pos.mio:
-            new_pos.mio[ckey]={ k:v for k,v in pos.mio[ckey].items() }
-        new_pos.mio_counts = pos.mio_counts[:]
-        # new_pos.mio = copy.deepcopy(pos.mio)
-        # new_pos.mio_counts = copy.deepcopy(pos.mio_counts)
-        # new_pos.mio_map = copy.deepcopy(pos.mio_map)
-        # new_pos.mio_slist = copy.deepcopy(pos.mio_slist)
-
-        return new_pos
-
-    def update_max_colors(self):
-        self.max_colors = max([ len(v) for k,v in self.color_list.items()],[0])
-
-    def copy_(self):
-        # assert isinstance(pos,cls)
-        pos=self
-        new_pos = position_c()
-        position_c.id +=1
-        new_pos.id=position_c.id
-        new_pos.array = copy.deepcopy(pos.array)
-        new_pos.free_cells=copy.deepcopy(pos.free_cells)
-        new_pos.free_cell_count=pos.free_cell_count
-        new_pos.color_list=copy.deepcopy(pos.color_list)
-        new_pos.mio = copy.deepcopy(pos.mio)
-        new_pos.mio_counts = copy.deepcopy(pos.mio_counts)
-        new_pos.mio_map = copy.deepcopy(pos.mio_map)
-        # new_pos.mio_slist = copy.deepcopy(pos.mio_slist)
-
-        return new_pos
 
 
 class move_c(ddot):
@@ -276,18 +122,22 @@ class Board:
         self._color_list=collections.defaultdict(dict)
         self._axes = axes
         # self.update_buffer()
-        self.free_cells = None
-        self.reset()
-        self._bg.update_graph(self)
+        self.free_cells = dict()
+        self.free_cell_count=0
         # self.prepare_view()
         self.max_color_candidates=10
         self.max_free_moves=10
         self.max_obst_moves=5
         self.max_no_path_moves=100
-        self.components=list()
+        # self.components=list()
+        self.component_map=dict()
         self.drawing_callbacks = drawing_callbacks
         self._logfile=logfile
         self.increases=[0]*(self._size+1)
+
+        self.reset()
+        self._bg.update_graph(self)
+
         if self._logfile:
             wh = open(self._logfile, 'w')
             wh.close()
@@ -303,7 +153,8 @@ class Board:
             [None for i in range(0, self._size)]
             for j in range(0, self._size)
         ]
-        self.free_cells = self._size*self._size
+        self.free_cell_count= self._size*self._size
+        self.free_cells=dict()
 
         self._color_list = dict()
         self._scrubs = []
@@ -766,6 +617,7 @@ class Board:
 
 
     # p1 + (1-p1)*p2 + (1- p1 - ((1-p1)*p2 )*p3 = p1 +p2 -p1p2 -p1p3 +p3 -p2p3+p1p2p3
+    # 3p - 3p**2+p**3 = 1-(1-p)**3
     # probability of event occurence in a sequence of events with given probabilities
     def prob_sequence(self, probs):
         prob=0
@@ -773,7 +625,7 @@ class Board:
         for p in probs:
             prob+=rest*p
             rest*=(1-p)
-        assert round(prob+rest,5)==1
+        assert round(prob+rest,6)==1
         return prob
 
     def comp_cand_mio(self, pos:position_c, cand:ddot):
@@ -959,202 +811,8 @@ class Board:
 
         return val1<val2
 
-    def shortest_path(self,cells_from:Dict[dpos,int],cells_to:Dict[dpos,int],blocks:Dict[dpos,int]):
-        queue=deque()
-        seen = dict()
-        assert not (set(cells_from)&set(cells_to))
-        for cell in cells_from:
-            queue.append([cell])
-            # seen.setdefault(cell, len(seen))
-        while queue:
-            path = queue.popleft()
-            cell = path[-1]
-            assert isinstance(cell, dpos)
-            if len(seen) != seen.setdefault(cell, len(seen)):
-                continue
-            neis = self.free_adj_cells(cell) # MAYBE: exclude=path[-1] to speed up
-            for nei in neis:
-                if nei in blocks:
-                    continue
-                if nei in cells_to:
-                    return path+[nei], seen
-                if nei in seen:
-                    continue
-                queue.append(path+[nei])
-        return [], seen
-
-    def shortest_path2(self,cells_from:Dict[dpos,int]
-                       ,cells_to:Dict[dpos,int]
-                       ,blocks:Dict[dpos,int]
-                       ,seen:Dict[dpos,int]
-                       ):
-        queue=deque()
-        # seen = dict()
-        assert not (set(cells_from)&set(cells_to))
-        for cell in cells_from:
-            queue.append([cell])
-            # seen.setdefault(cell, len(seen))
-        while queue:
-            path = queue.popleft()
-            cell = path[-1]
-            assert isinstance(cell, dpos)
-            if len(seen) != seen.setdefault(cell, len(seen)):
-                continue
-            neis = self.free_adj_cells(cell) # MAYBE: exclude=path[-1] to speed up
-            for nei in neis:
-                if nei in blocks:
-                    continue
-                if nei in cells_to:
-                    return path+[nei], seen
-                if nei in seen:
-                    continue
-                queue.append(path+[nei])
-        return [], seen
 
 
-    def init_test_graph(self, text):
-        if not text:
-            text='''
-            . y . . . r . . .
-            r . . . . . . . p
-            . y . p . . y y m
-            c . r . . . . p .
-            g b . p . . m . r
-            . m . . . b . . .
-            . . y . . . . c .
-            . . . g . b . . .
-            . . . . . g r . .
-            '''
-        for i, str in enumerate(filter(lambda v: v!="", re.split("\r?\n", text))):
-            for j, cc in enumerate(str.replace(' ','')):
-                color = {k:v for k,v in map(lambda v: (v[0],v), self._colors)}.get(cc)
-                self._array[j][self._size-i-1]=color
-
-    def dumps_test_graph(self):
-        out='\n'
-        for j in range(len(self._array)-1,-1,-1):
-            line=' '.join([(self._array[i][j] or '.')[0] for i in range(len(self._array))])
-            out=out+line+'\n'
-        return out
-
-
-    def cutoff(self, cell):
-        neis=self.free_adj_cells(cell)
-        # for i in range(len(neis)):
-        #     for j in range(i+1,len(neis)):
-        #         if not (abs(neis[i].x-neis[j].x)==2 or abs(neis[i].y-neis[j].y)==2):
-        #             continue
-
-        cs = cutset_c(neis[1],neis[3],blocks={cell:0})
-        self.cut_rec(cs, cs.start, cs.end, cs.blocks)
-        return cs
-
-    def cutoff2(self, cell):
-        neis=self.free_adj_cells(cell)
-        # for i in range(len(neis)):
-        #     for j in range(i+1,len(neis)):
-        #         if not (abs(neis[i].x-neis[j].x)==2 or abs(neis[i].y-neis[j].y)==2):
-        #             continue
-
-        cs = cutset_c(neis[1],neis[3],blocks={cell:0})
-        self.cut_rec2(cs, cs.start, cs.end, cs.blocks, dict())
-        return cs
-
-
-    def cut_rec(self,cs:cutset_c, start,end,blocks):
-        path, seen = self.shortest_path({start:0}, {end:0}, blocks)
-        # print("trying: %s"% ([ tuple(v) for v in blocks]))
-        if not path:
-            cs.cutsets.append(blocks)
-        elif len(blocks)< cs.MAX_CUTSET:
-            for i in range(1,len(path)-1):
-                block=path[i]
-                start=path[i-1]
-                _blocks={ **blocks, **{block:len(blocks)} }
-                self.cut_rec(cs, start, end, _blocks)
-
-    def cut_rec2(self,cs:cutset_c, start,end,blocks, comp):
-        path, path_comp = self.shortest_path2({start:0}, {end:0}, blocks, { **comp } )
-        _blocks=blocks
-        # print("trying: %s"% ([ tuple(v) for v in blocks]))
-        if not path:
-            cs.cutsets.append(blocks)
-            return path_comp
-        elif len(blocks)< cs.MAX_CUTSET:
-            current_comp = { **comp }
-            for i in range(1,len(path)-1):
-                block=path[i]
-                start=path[i-1]
-                _blocks={ **blocks, **{block:len(blocks)} }
-                _comp = self.cut_rec2(cs, start, end, _blocks, current_comp)
-                if _comp:
-                    current_comp=_comp
-            return dict()
-        return dict()
-
-    def cutoff_these(self, nei1, nei2, blocks=dict()):
-        path=[]
-
-        queue=deque()
-        while queue:
-            path,comp1,comp2 = queue.popleft()
-            for i, node in enumerate(path):
-
-                path, seen = self.shortest_path( node
-                                                , { node: 1 for node in path[i+1:]}
-                                                , { **blocks, node:len(blocks)})
-                if not path:
-                    comp1.update(seen)
-                    if not comp2:
-                        _, comp2 = self.shortest_path({ node: 1 for node in path[i+1:]}
-                                                      , { node: 1 for node in path[:i]}
-                                                      , blocks)
-                    else:
-                        all(map(lambda k: comp2.pop(k,None), blocks))
-                else:
-                    pass
-                _blocks = {k: v for k, v in blocks.items()}
-                _blocks[node] = len(_blocks)
-                queue.append((_blocks,comp1,comp2))
-
-
-    def cutoff_these_(self, nei1, nei2, max_cutoff_len=3, blocks=dict()):
-        queue = deque([blocks])
-        min_cutoff_len=None
-        cutoffs=[]
-        while queue:
-            blocks,comp1,comp2 = queue.popleft()
-            path,seen = self.shortest_path({nei1:0}, {nei2:0}, blocks)
-            if not path:
-                if min_cutoff_len==None or len(blocks) < min_cutoff_len:
-                    min_cutoff_len=len(blocks)
-                if len(blocks)<=max_cutoff_len:
-                    cutoffs.append(blocks)
-                cut_comp1 = { **cut_comp1, **seen }
-                if not cut_comp2:
-                    _, cut_comp2 = self.shortest_path({nei2: 0}, {nei1: 0}, blocks)
-                else:
-                    all(map(cut_comp2.pop, cut_comp1))
-
-            else:
-                for i, node in enumerate(path):
-
-                    path, seen = self.shortest_path({ node: 1 for node in path[:i]}
-                                                    , { node: 1 for node in path[i+1:]}
-                                                    , { **blocks, node:len(blocks)})
-                    if not path:
-                        comp1=seen
-                        if not cut_comp2:
-                            _, cut_comp2 = self.shortest_path({nei2: 0}, {nei1: 0}, blocks)
-                        else:
-                            all(map(cut_comp2.pop, cut_comp1))
-                    else:
-                        pass
-                    _blocks = {k: v for k, v in blocks.items()}
-                    _blocks[node] = len(_blocks)
-                    queue.append((_blocks,comp1,comp2))
-
-        return cutoffs
 
     def cmp_cmio_map(self, map1, map2):
         diffs=list()
@@ -1181,24 +839,19 @@ class Board:
             mio_counts,cmio_map1 = self.pos_evaluation(new_position)
         # self.log("pos check mio: %s" % (mio_counts))
 
+        p_dsize, p_pdsize = position.check_disc(move.cell_to)
+
         color = new_position.cell(move.cell_from)
 
         self.update_when_freeing(new_position,move.cell_from)
 
         color = new_position.free_cell(move.cell_from)
+
         if self.check_mio:
             mio_counts,cmio_map2 = self.pos_evaluation(new_position)
             diffs = self.cmp_cmio_map(cmio_map1, cmio_map2)
             if mio_counts!=new_position.mio_counts:
                 assert False
-        # src_cands= A.cand_cell_map[move.cell_from]
-        #
-        # for cand in src_cands:
-        #     cmio,changes = self.cost_freeing(new_position, move.cell_from, cand)
-        #     for change in changes:
-        #         new_position.mio_counts[change[0]] -= 1
-        #         new_position.mio_counts[change[1]] += 1
-
 
         scrubs= self.update_when_filling(new_position, move.cell_to, color )
         new_position.fill_cell(move.cell_to, color)
@@ -1208,19 +861,6 @@ class Board:
             if mio_counts != new_position.mio_counts:
                 assert False
 
-        # tgt_cands= A.cand_cell_map[move.cell_to]
-        #
-        # color = new_position.free_cell(move.cell_from)
-        # new_position.fill_cell(move.cell_to, color)
-        #
-        # for cand in tgt_cands:
-        #     cmio,changes = self.cost_filling(new_position, move.cell_to, color, cand)
-        #     for change in changes:
-        #         new_position.mio_counts[change[0]] -=1
-        #         if change[1] <= 0:
-        #             scrubs.append(cand)
-        #         new_position.mio_counts[change[1]] += 1
-
         if scrubs:
             self.make_search_scrubs(new_position, scrubs)
         if self.check_mio:
@@ -1229,7 +869,9 @@ class Board:
                 assert False
 
         self.update_position(new_position)
+        m_dsize, m_pdsize = new_position.check_disc(move.cell_from)
         # self.log("new pos mio: %s" % (new_position.mio_counts))
+        move.metric=p_dsize-m_dsize+p_pdsize-m_pdsize
         return new_position, bool(scrubs)
 
     def update_position(self, position:position_c):
@@ -1237,6 +879,7 @@ class Board:
         self._pos_bg.update_graph(position)
         position.metrics=copy.deepcopy(self._pos_bg.metrics)
         position.component_map = self._pos_bg.get_components()
+        position.bi_component_map = self._pos_bg.get_bi_components()
 
     def make_search_scrubs(self, pos:position_c, scrubs: List[ddot]):
         A=self._assessment
@@ -1373,10 +1016,21 @@ class Board:
             for ckey,cand in A_cands.items():
                 self.cand_mio(pos, cand)  # recomp if needed
 
-            for cand_key, value in pos.mio.items():
-                for color, item in value.items():
-                    mio,count,ccells=item
-                    mio_list.append((cand_key, color, mio, count))
+            tgt_keys=None
+            if trail:
+                tgt_keys=trail[-1].cand_keys
+
+            if tgt_keys:
+                for tgt_key in tgt_keys:
+                    value=pos.mio[tgt_key]
+                    for color, item in value.items():
+                        mio,count,ccells=item
+                        mio_list.append((tgt_key, color, mio, count))
+            else:
+                for cand_key, value in pos.mio.items():
+                    for color, item in value.items():
+                        mio,count,ccells=item
+                        mio_list.append((cand_key, color, mio, count))
             mio_slist = sorted(mio_list, key=lambda v: v[2])
 
             # first_queue=[] # improvement expected
@@ -1412,11 +1066,12 @@ class Board:
                             move = ddot(cell_from=ccell, cell_to=cell, color=color
                                         , new_mio=exp_mio, real_mio=None, ccount=count+1
                                         , move_type=MOVE_FREE, scrubs=False
+                                        , cand_keys=[ cand_key ]
                                         , metric=0, total_gain=0, gain_detail=dict())
 
                             path_exists, cross = self.move_check(pos, move)
                             if path_exists:
-                                move.metric= pos.metrics['lc'][tuple(move.cell_to)]
+                                move.metric= 0 # pos.metrics['lc'][tuple(move.cell_to)]
                                 _moves.append((exp_mio, len(_moves), move))
                             elif cross:
                                 move.move_type=MOVE_BLOCKED
@@ -1449,7 +1104,6 @@ class Board:
                 if trail and obcell == trail[-1].cell_to:
                     continue
 
-                move_mio=max([ move.new_mio for move in moves ])-1
                 # move_map.setdefault(obcell,dict())
                 obcolor = pos.cell(obcell)
                 assert obcolor!=None
@@ -1468,36 +1122,43 @@ class Board:
                         _mio,count,cc_cells=cmio[obcolor]
                         cells=cand.cells
                         for cell in cells:   # for candidate : every free cell
-                            # if cell in move_map[obcell]:
-                            #     continue
-                            exp_mio = _mio-1
-                            if cell in cc_cells:
-                                exp_mio = _mio
-                            if pos.cell(cell)==None:
-                                # move_map[obcell][cell]=1
-                                mio=max(_mio-1,move_mio)
-                                move = ddot(cell_from=obcell, cell_to=cell, color=obcolor
-                                            , new_mio=exp_mio, real_mio=None, ccount=0
-                                            , move_type=MOVE_UNBLOCKING
-                                            , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
-                                path_exists, cross = self.move_check(pos, move)
-                                if path_exists:
-                                    move.metric = pos.metrics['lc'][tuple(move.cell_to)]
-                                    _moves.append((exp_mio, len(_moves), move))
-                                    dispatched = True
-                if dispatched:
-                    continue
-                for fcell in pos.free_cells:
-                    exp_mio=4
-                    move = ddot(cell_from=obcell, cell_to=fcell, color=obcolor
-                                , new_mio=exp_mio, real_mio=None, ccount=0
-                                , move_type=MOVE_UNBLOCKING
-                                , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
-                    path_exists, cross = self.move_check(pos, move)
-                    if path_exists:
-                        move.metric = pos.metrics['lc'][tuple(move.cell_to)]
-                        _moves.append((exp_mio, len(_moves), move))
-                        dispatched = True
+                            for move in moves:
+                                # move_mio=max([ move.new_mio for move in moves ])-1
+                                move_mio = move.new_mio - 1
+                                tgt_keys = move.cand_keys
+                                    # tgt_keys = list({ ckey for move in moves for ckey in move.cand_keys })
+
+                                # if cell in move_map[obcell]:
+                                #     continue
+                                exp_mio = _mio-1
+                                if cell in cc_cells:
+                                    exp_mio = _mio
+                                if pos.cell(cell)==None:
+                                    # move_map[obcell][cell]=1
+                                    mio=max(_mio-1,move_mio)
+                                    move = ddot(cell_from=obcell, cell_to=cell, color=obcolor
+                                                , new_mio=exp_mio, real_mio=None, ccount=0
+                                                , move_type=MOVE_UNBLOCKING
+                                                , cand_keys = tgt_keys
+                                                , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
+                                    path_exists, cross = self.move_check(pos, move)
+                                    if path_exists:
+                                        move.metric = pos.metrics['lc'][tuple(move.cell_to)]
+                                        _moves.append((exp_mio, len(_moves), move))
+                                        dispatched = True
+                    if dispatched:
+                        continue
+                    for fcell in pos.free_cells:
+                        exp_mio=4
+                        move = ddot(cell_from=obcell, cell_to=fcell, color=obcolor
+                                    , new_mio=exp_mio, real_mio=None, ccount=0
+                                    , move_type=MOVE_UNBLOCKING
+                                    , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
+                        path_exists, cross = self.move_check(pos, move)
+                        if path_exists:
+                            move.metric = 0 # pos.metrics['lc'][tuple(move.cell_to)]
+                            _moves.append((exp_mio, len(_moves), move))
+                            dispatched = True
 
             move_map = dict()
 
@@ -1807,9 +1468,9 @@ class Board:
         return mio2 > mio1
 
 
-    def get_pos_components(self,pos):
-
-        pos.components  = self._pos_bg.get_components()
+    # def get_pos_components(self,pos):
+    #
+    #     pos.components  = self._pos_bg.get_components()
 
 
     def move_check(self, pos:position_c, move:ddot):
@@ -1826,88 +1487,7 @@ class Board:
                                , lc=0, cut_prob=0)
 
         path_exists, cross = self.check_pos_path_across(pos, move.cell_from, move.cell_to)
-
         return path_exists, cross
-        #
-        # if not path_exists:
-        #     A.no_path_map[move_key] = move
-        #     move.gain_detail = gd
-        #     trimmed_cross = set()
-        #     for node in cross:
-        #         if self.get_cell(dpos(node[0], node[1])) != move.color.name:
-        #             trimmed_cross.add(node)
-        #
-        #     move.cross = trimmed_cross
-        #     A.no_path_moves.add(move)
-        #     self.log("%s %d,%d>%d,%d: %.2f: g,l,cc,ag=%.2f,%.2f,%.2f,%.2f ob=%.2f cross=%s"
-        #              % ('-', move.pos_from.x, move.pos_from.y, move.pos_to.x, move.pos_to.y
-        #                 , move.total_gain, gd.gain, gd.loss, gd.cand_cost, gd.added_gain
-        #                 , gd.ob_block_cost, cross))
-        #     return True
-        #
-        # gd.gain =
-        #
-        # A.move_map[move_key] = move
-        # A.cand_color_moves.add(move)
-        #
-
-
-#--------------
-
-        gd = ddot(gain=0, loss=0, cand_cost=0, added_gain=0, src_gain=0, src_loss=0
-                               , tgt_gain=0, tgt_loss=0, ob_block_cost=0
-                               , lc=0, cut_prob=0)
-
-        gd.added_gain = added_gain
-        # gd.src_gain, gd.src_loss = self.mio_src_gain(move)
-        # gd.tgt_gain, gd.tgt_loss = self.mio_tgt_gain(move)
-        gd.src_gain, gd.src_loss,  gd.tgt_gain, gd.tgt_loss = self.cost(move)
-
-        gd.gain = max(gd.src_gain, gd.tgt_gain, gd.added_gain)
-        gd.loss = max(gd.src_loss, gd.tgt_loss)
-
-        gd.cand_cost = self.cand_cost(move)
-
-        gd.ob_block_cost = self.obst_block_check(move.pos_to, cand_color)
-
-        path_exists, cross = self.check_path_across(move.pos_from, move.pos_to)
-
-        if not path_exists:
-            A.no_path_map[move_key] = move
-            if blocked!=False:
-                move.total_gain = (gd.gain - gd.loss + gd.cand_cost) * 1.0 - gd.ob_block_cost - gd.lc * 2 + gd.cut_prob
-                move.gain_detail=gd
-                trimmed_cross = set()
-                for node in cross:
-                    if self.get_cell(dpos(node[0], node[1]))!=move.color.name:
-                        trimmed_cross.add(node)
-
-                move.cross = trimmed_cross
-                A.no_path_moves.add(move)
-                self.log("%s %d,%d>%d,%d: %.2f: g,l,cc,ag=%.2f,%.2f,%.2f,%.2f ob=%.2f cross=%s"
-                         % ('-', move.pos_from.x, move.pos_from.y, move.pos_to.x, move.pos_to.y
-                            , move.total_gain, gd.gain, gd.loss, gd.cand_cost, gd.added_gain
-                            , gd.ob_block_cost, cross))
-                return True
-            return False
-
-        gd.cut_prob = self.assess_cut_probability(move)
-        assert gd.cut_prob!=None
-        gd.lc = self.tent_lc_metric(move.pos_from, move.pos_to)
-
-        move.total_gain = (gd.gain - gd.loss + gd.cand_cost) * 1.0 - gd.ob_block_cost - gd.lc * 2 + gd.cut_prob
-        move.gain_detail=gd
-
-        A.move_map[move_key] = move
-        A.cand_color_moves.add(move)
-
-        self.log("%s %d,%d>%d,%d: %.2f: g,l,cc,ag=%.2f,%.2f,%.2f,%.2f ob,lc,cp=%.2f,%.2f,%.2f"
-                 % ('+', move.pos_from.x, move.pos_from.y, move.pos_to.x, move.pos_to.y
-                    , move.total_gain, gd.gain, gd.loss, gd.cand_cost, gd.added_gain
-                    , gd.ob_block_cost, gd.lc, gd.cut_prob))
-        return True
-
-
 
     def add_move_candidate_(self, move:ddot, added_gain:float=0, blocked=None):
         """
@@ -2170,14 +1750,24 @@ class Board:
     def adj_cells(self, start_cell):
         cells=[]
         for dir in self._straight_dirs:
-            npos:dpos = self.new_pos(start_cell, dir)
-            if not npos:
+            cell:dpos = self.adj_cell(start_cell, dir)
+            if not cell:
                 continue
-            color = self.cell(npos)
-            if color:
-                continue
-            cells.append(npos)
+            color = self.cell(cell)
+            cells.append(cell)
         return cells
+
+    # def adj_cells(self, start_cell):
+    #     cells=[]
+    #     for dir in self._straight_dirs:
+    #         npos:dpos = self.new_pos(start_cell, dir)
+    #         if not npos:
+    #             continue
+    #         color = self.cell(npos)
+    #         if color:
+    #             continue
+    #         cells.append(npos)
+    #     return cells
 
     def next_move(self):
         history_item = dict(board=dict(move=list(), remove=list(), new=list()), random_state=None)
@@ -2337,13 +1927,13 @@ class Board:
     def free_cell(self,pos:dpos, color:str):
         assert self._array[pos.x][pos.y]==color
         self._array[pos.x][pos.y]=None
-        self.free_cells+=1
+        self.free_cell_count+=1
         del self._color_list[color][pos]
 
     def fill_cell(self,pos:dpos, color:str):
         assert self._array[pos.x][pos.y] == None
         self._array[pos.x][pos.y] = color
-        self.free_cells-=1
+        self.free_cell_count-=1
         self._color_list.setdefault(color, dict())[pos] = 1
 
     def make_move(self,move):
@@ -2377,6 +1967,7 @@ class Board:
     def update_graph(self):
         self._bg.update_graph(self)
         self.component_map = self._bg.get_components()
+        self.bi_component_map = self._bg.get_bi_components()
 
     # def update_buffer(self):
     #     self._buffer=copy.deepcopy(self._array)

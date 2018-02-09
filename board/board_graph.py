@@ -716,6 +716,13 @@ class Board_graph:
             component_map.setdefault(stuck_node, list()).append((set(stuck_node), stuck_node_bry))
         return component_map
 
+    def get_bi_components(self):
+        comps = nx.biconnected_components(self.FG)
+        bi_comp_map=dict()
+        for comp in comps:
+            for node in comp:
+                bi_comp_map.setdefault(node,[]).append(set(comp))
+        return bi_comp_map
 
     # def bfs(g, start):
     #     queue, enqueued = deque([(None, start)]), set([start])
