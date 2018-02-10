@@ -138,6 +138,8 @@ class Board:
         self.random_ahead=self._size*3
         self.random_queue=[]
         self.throw_known=True
+        self.picked=None
+        self.prepicked=None
 
         self.reset()
         self._bg.update_graph(self)
@@ -885,6 +887,29 @@ class Board:
                 diffs.append((ckey, None, map2[ckey]))
         return diffs
 
+    def place_promised(self, picked, consume:bool, position=None):
+        pos=position or self
+        _picked = []
+        _occupied = []
+        for item in picked:
+            if pos.cell(item[0]) == None:
+                _picked.append(item)
+            else:
+                _occupied.append(item[1])
+
+        pos.place(_picked)
+        if len(_occupied) > 0:
+            picked_add = self.get_random_free_cells(start=len(picked)
+                                        , length=len(_occupied), position=pos)
+            for i, color in enumerate(_occupied):
+                picked_add[i] = (picked_add[i][0], color, picked_add[i][2])
+            pos.place(picked_add)
+            _picked += picked_add
+        if consume:
+            self.random_queue=self.random_queue[len(_picked):]
+        return _picked
+
+
 
     def make_search_move(self, position:position_c, move:move_c, trail=None, make_throw=None):
         A=self._assessment
@@ -897,9 +922,13 @@ class Board:
         # self.log("pos check mio: %s" % (mio_counts))
 
 
-        picked=[]
+        prepicked=[]
         if trail and len(trail)==1:
-            picked = new_position.get_random_free_cells(random_storage=self, consume=False)
+            prepicked=self.prepicked
+            assert prepicked
+            # prepicked = self.get_random_free_cells(position=new_position)
+            # if not self.prepicked==prepicked:
+            #     assert False
 
         color = new_position.cell(move.cell_from)
 
@@ -930,21 +959,24 @@ class Board:
 
         if not scrubs:
             if trail and len(trail)==1:
-                _picked=[]
-                _occupied=[]
-                for item in picked:
-                    if new_position.cell(item[0])==None:
-                        _picked.append(item)
-                    else:
-                        _occupied.append(item[1])
+                _picked = self.place_promised(prepicked, position=new_position, consume=False)
 
-                new_position.place(_picked)
-                if len(_occupied) > 0:
-                    picked_add = new_position.get_random_free_cells(start=len(picked)
-                                , length=len(_occupied), random_storage=self, consume=False)
-                    for i,color in enumerate(_occupied):
-                        picked_add[i]=(picked_add[i][0], color)
-                    new_position.place(picked_add)
+                # _picked=[]
+                # _occupied=[]
+                # for item in picked:
+                #     if new_position.cell(item[0])==None:
+                #         _picked.append(item)
+                #     else:
+                #         _occupied.append(item[1])
+                #
+                # new_position.place(_picked)
+                # if len(_occupied) > 0:
+                #     picked_add = new_position.get_random_free_cells(start=len(picked)
+                #                 , length=len(_occupied), random_storage=self, consume=False)
+                #     for i,color in enumerate(_occupied):
+                #         picked_add[i]=(picked_add[i][0], color)
+                #     new_position.place(picked_add)
+                new_position.picked=_picked
                 new_position.mio_counts, _ = self.pos_evaluation(new_position)
         # pos_after_throw = position_c(self)
         # self.gifts(pos_before_throw, pos_after_throw)
@@ -1872,6 +1904,7 @@ class Board:
     def next_move(self):
         history_item = dict(board=dict(move=list(), remove=list(), new=list()), random_state=None)
         scrubbed=False
+        _picked = self.get_random_free_cells()
         if self.current_move:
             history_item['board']['move'].append((self.current_move.cell_from
                                         , self.current_move.cell_to
@@ -1889,11 +1922,17 @@ class Board:
         self.picked=[]
         if not scrubbed:
             pos_before_throw=position_c(self)
-            self.picked= self.get_random_free_cells()
-            self.place(self.picked)
+            if not self.prepicked:
+                self.prepicked=_picked
+            self.picked = self.place_promised(self.prepicked, consume=True) # actual placement
+            self.prepicked=self.get_random_free_cells()
+            # self.place(self.picked)
             pos_after_throw = position_c(self)
             self.gifts(pos_before_throw, pos_after_throw)
+        else:
+            debug=1
 
+        history_item['board']['prepicked']=self.prepicked
         history_item['board']['new']=self.picked
         history_item['board']['random_queue']=self.random_queue
         history_item['random_state'] = base64.b64encode(pickle.dumps(random.getstate())).decode('ascii')
@@ -1913,6 +1952,7 @@ class Board:
             self.drawing_callback('after_throw')
 
         self.current_move = self.find_best_move()
+
         if self.current_move:
             if self.have_drawing_callback('move_found'):
                 self.draw_move()
@@ -1965,6 +2005,8 @@ class Board:
             self.drawing_callback('after_throw')
 
         # self._bg.update_graph(self)
+        if not self.prepicked:
+            self.prepicked=self.get_random_free_cells()
         self.current_move = self.find_best_move()
         if self.current_move:
             if self.have_drawing_callback('move_found'):
@@ -2011,7 +2053,7 @@ class Board:
 
     def place(self,picked):
         for item in picked:
-            (pos,color)=item
+            (pos,color,rnd)=item
             if self._scrubs:
                 self.scrub_cells()
             self.fill_cell(pos,color)
@@ -2090,8 +2132,9 @@ class Board:
                     free.append(dpos(i,j))
         return free
 
-    def get_random_free_cells(self, start=0, length=None, consume=True):
-        free=self.get_free_cells()
+    def get_random_free_cells(self, start=0, length=None, position=None):
+        pos = position or self
+        free=pos.get_free_cells()
         picked=[]
         if length==None:
             length =self._batch
@@ -2106,13 +2149,29 @@ class Board:
             pick = self.random_queue[i][0] % len(free)
             color = self._colors[self.random_queue[i][1] % self._colsize]
             # pick = randint(0,len(free)-1)
+            picked.append((free[pick], color, self.random_queue[i]))
+            free[pick] = free[-1]
+            free.pop()
+        return picked
+
+
+    def get_random_free_cells_(self, start=0, length=None):
+        free=self.get_free_cells()
+        picked=[]
+        if length==None:
+            length =self._batch
+        # batch = batch if batch else self._batch
+        assert start+length <= self.random_ahead
+        if start+length > len(self.random_queue):
+            for i in range(len(self.random_queue), self.random_ahead):
+                self.random_queue.append((randint(0,100000-1),randint(0,100000-1)))
+        for i in range(start,start+length):
+            pick = self.random_queue[i][0] % len(free)
+            color = self._colors[self.random_queue[i][1] % self._colsize]
+            # pick = randint(0,len(free)-1)
             picked.append((free[pick], color))
             free[pick] = free[-1]
             free.pop()
-        if consume:
-            if start!=0:
-                assert False
-            self.random_queue=self.random_queue[start+length:]
         return picked
 
     def valid(self,x,y):
@@ -2241,8 +2300,12 @@ class Board:
                 self.make_history_move(move)
             # for scrubs in history_move['board']['remove']:
             #     self.scrub_cells(scrubs)
-            self.place(history_move['board']['new'])
             self.picked=history_move['board']['new']
+            for i,pick in enumerate(self.picked):
+                if len(pick)!=3:
+                    self.picked[i]=(pick[0],pick[1],0)
+            self.place(history_move['board']['new'])
+            # self.prepicked = history_move['board']['prepicked']
             last_state=history_move['random_state']
             if 'random_queue' not in history_move['board']:
                 self.random_queue=[]

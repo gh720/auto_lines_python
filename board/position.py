@@ -228,7 +228,7 @@ class position_c:
     def place(self,picked):
         self.picked=picked
         for item in picked:
-            (pos,color)=item
+            (pos,color,rnd)=item
             if self._scrubs:
                 self.scrub_cells()
             self.fill_cell(pos,color)
@@ -240,31 +240,6 @@ class position_c:
     def get_free_cells(self):
         return list(self.free_cells)
 
-    def get_random_free_cells(self, random_storage=None, start=0, length=None, consume=True):
-        rs = random_storage or self
-        free=self.get_free_cells()
-        picked=[]
-        if length==None:
-            length =rs._batch
-        # batch = batch if batch else self._batch
-        assert start+length <= rs.random_ahead
-        if start+length > len(rs.random_queue):
-            # if not consume:
-            #     assert False
-            for i in range(len(rs.random_queue), rs.random_ahead):
-                rs.random_queue.append((randint(0,100000-1),randint(0,100000-1)))
-        for i in range(start,start+length):
-            pick = rs.random_queue[i][0] % len(free)
-            color = rs._colors[rs.random_queue[i][1] % rs._colsize]
-            # pick = randint(0,len(free)-1)
-            picked.append((free[pick], color))
-            free[pick] = free[-1]
-            free.pop()
-        if consume:
-            if start!=0:
-                assert False
-            rs.random_queue=rs.random_queue[start+length:]
-        return picked
 
     def scrub_cells(self,scrubs=None):
         self._scrubs = scrubs if scrubs else self._scrubs
