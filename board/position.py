@@ -48,6 +48,7 @@ class position_c:
         self.metrics=None
         self.max_colors=None
         self.component_map=None
+        self.components=None
         # self.mio_map = dict()
         if board:
             self.board=board
@@ -215,8 +216,19 @@ class position_c:
             return True
         return False
 
+    def check_overall_disc(self):
+        comps = self.components
+        total_disc_size=0
+        if len(comps)<2:
+            return 0
+        for i,j in itertools.combinations(range(len(comps)),2):
+            isec = comps[i][1] & comps[j][1]
+            disc_size = (len(comps[i][1] - isec) * len(comps[j][0])
+                         + len(comps[j][1] - isec) * len(comps[i][0]))
+            total_disc_size += disc_size
+        return total_disc_size
 
-    def check_disc(self,cell):
+    def check_disc(self,cell, check_possible_disc=None):
         total_disc_size = 0
         total_possible_disc_size = 0
         bi_comps = self.bi_component_map.get(tuple(cell))
@@ -237,6 +249,10 @@ class position_c:
                 disc_size = ( len(comps[i][1]-isec) * len(comps[j][0])
                               + len(comps[j][1]-isec) * len(comps[i][0]))
                 total_disc_size += disc_size
+
+            if not check_possible_disc:
+                return total_disc_size, total_possible_disc_size
+
 
             for bci, bi_comp in enumerate(bi_comps):
                 last_inner=last_outer=None

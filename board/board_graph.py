@@ -701,9 +701,21 @@ class Board_graph:
     def get_components(self):
         comps = nx.connected_components(self.FG)
         component_map=dict()
+        components=[]
         nonstuck=set()
+        component_node_seen=dict()
+
         for comp in comps:
             bry = nx.node_boundary(self.G, comp)
+            comp_set = set()
+            bry_set = set()
+            for node in comp:
+                comp_set.add(node)
+                component_node_seen[node]=1
+            for node in bry:
+                bry_set.add(node)
+            component_node_seen[node] = 1
+            components.append((comp_set,bry_set))
             _nonstuck = comp | bry
             for node in _nonstuck:
                 component_map.setdefault(node,list()).append((comp, bry))
@@ -714,7 +726,11 @@ class Board_graph:
         for stuck_node in ns_bry:
             stuck_node_bry = nx.node_boundary(self.G, [stuck_node])
             component_map.setdefault(stuck_node, list()).append((set(stuck_node), stuck_node_bry))
-        return component_map
+        stuck = set([ node for node in self.G if node not in component_node_seen ])
+        if stuck:
+            components.append((set(), stuck))
+
+        return component_map, components
 
     def get_bi_components(self):
         comps = nx.biconnected_components(self.FG)

@@ -863,7 +863,7 @@ class Board:
         return diffs
 
 
-    def make_search_move(self, position:position_c, move:move_c):
+    def make_search_move(self, position:position_c, move:move_c, make_throw=None):
         A=self._assessment
 
         new_position = position.copy()
@@ -873,7 +873,6 @@ class Board:
             mio_counts,cmio_map1 = self.pos_evaluation(new_position)
         # self.log("pos check mio: %s" % (mio_counts))
 
-        p_dsize, p_pdsize = position.check_disc(move.cell_to)
 
         color = new_position.cell(move.cell_from)
 
@@ -902,17 +901,29 @@ class Board:
             if mio_counts != new_position.mio_counts:
                 assert False
 
+        # self.picked = self.get_random_free_cells()
+        # self.place(self.picked)
+        # pos_after_throw = position_c(self)
+        # self.gifts(pos_before_throw, pos_after_throw)
+
         self.update_position(new_position)
-        m_dsize, m_pdsize = new_position.check_disc(move.cell_from)
+
+        # p_dsize, p_pdsize = position.check_total_disc(move.cell_to)
+        # m_dsize, m_pdsize = new_position.check_disc(move.cell_from)
+
+        p_dsize = new_position.check_overall_disc()
+        m_dsize = position.check_overall_disc()
+
         # self.log("new pos mio: %s" % (new_position.mio_counts))
-        move.metric=p_dsize-m_dsize+p_pdsize-m_pdsize
+        # move.metric=p_dsize-m_dsize+p_pdsize-m_pdsize
+        move.metric = p_dsize-m_dsize
         return new_position, bool(scrubs)
 
     def update_position(self, position:position_c):
         position.update_max_colors()
         self._pos_bg.update_graph(position)
         position.metrics=copy.deepcopy(self._pos_bg.metrics)
-        position.component_map = self._pos_bg.get_components()
+        position.component_map,position.components = self._pos_bg.get_components()
         position.bi_component_map = self._pos_bg.get_bi_components()
 
     def make_search_scrubs(self, pos:position_c, scrubs: List[ddot]):
@@ -2012,7 +2023,7 @@ class Board:
 
     def update_graph(self):
         self._bg.update_graph(self)
-        self.component_map = self._bg.get_components()
+        self.component_map, self.components = self._bg.get_components()
         self.bi_component_map = self._bg.get_bi_components()
 
     # def update_buffer(self):
