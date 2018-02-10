@@ -92,11 +92,12 @@ class Board_graph:
         # APG=FG.subgraph(ap).copy()
         return self.metrics
 
-    def change_free_graph(self, board, free_cells=[], fill_cells=[]):
+    def change_free_graph(self, board, free_cells=None, fill_cells=None):
         for pos in free_cells:
             node= (pos.x, pos.y)
             node_data = self.G.nodes[node] # TODO: check intersections later
-            assert node not in self.FG.nodes
+            if node in self.FG.nodes:
+                assert False
             self.FG.add_node(node, **node_data)
         for pos in free_cells:
             node = (pos.x, pos.y)
@@ -135,8 +136,8 @@ class Board_graph:
         if prepicked:
             ppnodes=[ tuple(item[0]) for item in prepicked]
             ppcolors=[ item[1] for item in prepicked]
-            PPG=self.G.subgraph(ppnodes)
-            nx.draw_networkx_nodes(PPG, pos=gna(G, 'pos'), with_labels=False, node_shape='o', node_size=200
+            # PPG=self.G.subgraph(ppnodes)
+            nx.draw_networkx_nodes(G, nodelist=ppnodes, pos=gna(G, 'pos'), with_labels=False, node_shape='o', node_size=200
                          , node_color=ppcolors)
 
     def draw_moves(self, board, moves):

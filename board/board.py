@@ -103,11 +103,12 @@ class Board:
     # debug_hqueue=LOGLEVEL_DEBUG
     debug_hqueue=LOGLEVEL_INFO
     debug_mio_changes=0
-    check_mio=True
+    check_mio=False
     debug_repeat = True
     debug_moves=[
-        (7,6,5,5),
-        (1,8,3,3)
+        (1,6,1,5),
+        (0,4,1,5),
+        (0,1,1,4)
         # ((1, 8), (0, 4))
     ]
     # axes: x - left, y - up, directions enumerated anti-clockwise
@@ -140,6 +141,7 @@ class Board:
         self.throw_known=True
         self.picked=None
         self.prepicked=None
+        self.cost_value_len = self._scrub_length * 2 + 2
 
         self.reset()
         self._bg.update_graph(self)
@@ -413,7 +415,8 @@ class Board:
 
         best_value=None
 
-        zero_value=[0]*(len(original_position.mio_counts)+3) # 0 for adj value, 1 for metric,  2  for free_cell_count diff
+        zero_value=[0]*(len(original_position.mio_counts)+2) # 1(in the middle) for metric
+        assert len(zero_value)==self.cost_value_len
 
         scrubs=False
 
@@ -424,14 +427,14 @@ class Board:
             _value, _, move,position,trail=heappop(hqueue)
             value=self.negate_tuple(_value)
             if move!=None:
-                assert len(value) == self._scrub_length * 2 + 3
+                assert len(value) == self.cost_value_len
 
             new_position = position
             worse = False
             if move!=None:
                 if move.real_mio==None: # rough value estimate, assess and put back on queue
-                    if max_value !=None and value[0] < max_value:
-                        continue
+                    # if max_value !=None and value[0] < max_value:
+                    #     continue
                     tt = tuple(sorted([ self.move_tuple(move) for move in trail ]))
                     if tt in seen_trails:
                         skipped+=1
@@ -476,7 +479,7 @@ class Board:
                         diff = self.position_diff(original_position, new_position)
 
                         value,mio = tuple(self.rel_value(diff, len(trail), trail))
-                        move.real_mio=mio
+                        move.real_mio=self._scrub_length
                         if len(trail)>=DEPTH-1 or move.scrubs:
                             max_value=value[0] if max_value==None or value[0]>max_value else max_value
                         unique+=1
@@ -494,12 +497,18 @@ class Board:
 
                 # move_changes[self.move_key(move)]=1
                 if move.move_type!=MOVE_UNBLOCKING_PASS:
-                    val1,mio=self.gain_value(self.position_diff(original_position, A.position), len(A.best_moves)
-                                        , A.best_moves)
-                    val2,mio=self.gain_value(self.position_diff(original_position, new_position), len(trail)
-                                        , trail )
-                    # worse = self.pos_is_lesser(A.position, new_position)
-                    worse = val1 < val2
+                    worse=False
+                    val1=[]
+                    val2, mio = self.gain_value(self.position_diff(original_position, new_position), len(trail)
+                                                , trail)
+                    if not A.best_moves:
+                        worse=True
+                    else:
+                        val1,mio=self.gain_value(self.position_diff(original_position, A.position), len(A.best_moves)
+                                            , A.best_moves)
+                        # val2,mio=self.gain_value(self.position_diff(original_position, new_position), len(trail)
+                        #                     , trail )
+                        worse = val1 < val2
                     if worse==True:
                         A.best_moves=trail
                         A.position=new_position
@@ -552,14 +561,13 @@ class Board:
             if len(trail)+1 < DEPTH:
                 if value==None:
                     value=zero_value
-                    assert len(value)==self._scrub_length*2+3
                 new_moves = self.find_new_moves(new_position,trail)
                 for new_move in new_moves:
                     _trail=trail+[new_move]
 
-                    if not len(value) == self._scrub_length * 2 + 3:
+                    if not len(value) == self.cost_value_len:
                         assert False
-                    _diff=list(value[2:])
+                    _diff=list(self.get_diff_from_value(value))
                     _diff[new_move.new_mio+1] += 1
                     diff=tuple(_diff)
                     estimate,mio = self.rel_value(diff, len(_trail), _trail)
@@ -614,6 +622,8 @@ class Board:
                 cell=moves[index].cell_to
                 if position.cell(cell)!=None:
                     path_exists=False
+                elif position.cell(moves[index].cell_from)!=moves[index].color:
+                    path_exists=False
                 else:
                     path_exists, cross = self.check_pos_path_across(position
                                             ,moves[index].cell_from, moves[index].cell_to)
@@ -651,6 +661,8 @@ class Board:
                                         , move[0].cell_from.x, move[0].cell_from.y
                                         , move[0].cell_to.x, move[0].cell_to.y, move[1])
                                         for move in trail])))
+        if not trails:
+            return None
         return [ move_cp[0] for move_cp in trails[0][2]]
 
 
@@ -801,7 +813,41 @@ class Board:
     ## return free_cell_count+mio_counts diff adjusted for count of moves between two positions
     ## the greater the value, the earlier it is taken off the queue
     # diff == b.scrub*2 +1 # returns: b.scrub*2+3 : adjusted value + metrics placeholder
-    def rel_value(self, _diff, steps:int, trail:List[ddot]):
+    def rel_value(self, diff, steps:int, trail:List[ddot]):
+        if not len(diff)==self.cost_value_len-1:
+            assert False
+
+        if trail:
+            comb_metric = round(sum([move.metric for move in trail]) * max([move.metric for move in trail]),4)
+        else:
+            comb_metric = -math.inf
+
+        value = [ *diff[:self._scrub_length-1], -comb_metric, *diff[self._scrub_length-1:]]
+
+        return value, 0
+
+    def get_diff_from_value(self,value):
+        if not len(value)==self.cost_value_len:
+            assert False
+        return tuple([ *value[:self._scrub_length-1], *value[self._scrub_length:]])
+
+
+    def gain_value(self, diff, steps:int, trail:List[ddot]):
+        if not len(diff)==self.cost_value_len-1:
+            assert False
+        v=0
+
+        if trail:
+            comb_metric = round(sum([move.metric for move in trail]) * max([move.metric for move in trail]),4)
+        else:
+            comb_metric = math.inf
+
+        value = [ *diff[:self._scrub_length-1], -comb_metric, *diff[self._scrub_length-1:]]
+
+        return value, 0
+
+
+    def rel_value_(self, _diff, steps:int, trail:List[ddot]):
         assert len(_diff)==self._scrub_length*2 +1
         v=0
         last_i=None
@@ -831,7 +877,8 @@ class Board:
             value = [-((last_i-1) + steps), -comb_metric, *diff]
         return value, last_i-1
 
-    def gain_value(self, _diff, steps:int, trail:List[ddot]):
+
+    def gain_value_(self, _diff, steps:int, trail:List[ddot]):
         assert len(_diff)==self._scrub_length*2 +1
         v=0
         last_i=None
@@ -860,9 +907,9 @@ class Board:
             value = [-((last_i-1)), -steps, -comb_metric, *diff]
         return value, last_i-1
 
-    def position_rel_value(self, pos1: position_c, pos2: position_c, steps:int=0):
-        diff = self.position_diff(pos1,pos2)
-        return self.rel_value(diff,steps)
+    # def position_rel_value(self, pos1: position_c, pos2: position_c, steps:int=0):
+    #     diff = self.position_diff(pos1,pos2)
+    #     return self.rel_value(diff,steps)
 
     ## return free_cell_count + mio_counts diff - b.scrub*2 +1
     def position_diff(self, pos1: position_c, pos2: position_c):
