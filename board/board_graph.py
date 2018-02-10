@@ -114,42 +114,34 @@ class Board_graph:
             value=nx.load_centrality(self.FG, node)
         return value
 
-    def draw(self,axes=True, chained=False):
+    def draw(self,axes=True, chained=False, prepicked=None):
         G,FG,OG = self.G,self.FG,self.OG # FIND: go about inappropriate calls
-        # if not chained:
-        #     plt.sca(axes)
-        #     plt.cla()
         if axes==True:
             plt.sca(self.axes)
         elif axes:
             plt.sca(axes)
 
 
-        # OG = G.subgraph([ x for x,data in G.nodes.items() if data['occupied']!=None] ).copy()
-        # nx.set_node_attributes(OG,gna(OG,'occupied'),'colors')
-        # FG=G.copy(); FG.remove_nodes_from(OG)
-        # sna(FG,nx.load_centrality(FG),'lc_metric')
-        # ap=nx.articulation_points(FG)
-        # APG=FG.subgraph(ap).copy()
-
-        # text={ (x,y):(x,y+.3) for x,y in gna(G,'pos') };
-
-        
-        nx.draw_networkx(FG,pos=gna(G,'pos')
-            , with_labels=False, node_shape='s',node_size=100, cmap=plt.get_cmap('plasma')
-            , node_color=[gna(FG,'lc_metric').get(x,0)for x in list(FG)] )
+        nx.draw_networkx(G,pos=gna(G,'pos')
+            , with_labels=False, node_shape='s',node_size=20)
+            # , cmap=plt.get_cmap('plasma')
+            # , node_color=[gna(FG,'lc_metric').get(x,0)for x in list(FG)] )
         nx.draw_networkx(OG,pos=gna(OG,'pos'), with_labels=False, node_shape='o',node_size=500
             , node_color=[ mpl.colors.cnames[y] for x,y in gna(OG,'color').items()] )
         # nx.draw_networkx_edges(TG, gna(TG,'pos'), sp_edges, width=3.0, edge_color='r', arrow_style='>')
         # nx.draw_networkx_nodes(APG, pos=gna(FG,'pos'), node_shape='d', node_color='r', node_size=300)
         # nx.draw_networkx_labels(G, pos=text, labels={ (x,y):str((x,y)) for x,y in gna(G,'pos') })
-        # if not chained:
-        #     plt.show()
 
+        if prepicked:
+            ppnodes=[ tuple(item[0]) for item in prepicked]
+            ppcolors=[ item[1] for item in prepicked]
+            PPG=self.G.subgraph(ppnodes)
+            nx.draw_networkx_nodes(PPG, pos=gna(G, 'pos'), with_labels=False, node_shape='o', node_size=200
+                         , node_color=ppcolors)
 
     def draw_moves(self, board, moves):
         FG=None
-        self.draw(axes=False, chained=True)
+        # self.draw(axes=False, chained=True)
 
         for move in moves:
             f=move.cell_from
@@ -241,7 +233,8 @@ class Board_graph:
         # if not chained:
         #     plt.sca(axes)
         #     plt.cla()
-        self.draw(chained=True)
+
+        # self.draw(chained=True)
         plt.sca(self.axes)
         nx.draw_networkx_edges(TG, gna(self.G, 'pos'), width=2, edge_color='cyan')
         if tentative_scrub_edges:

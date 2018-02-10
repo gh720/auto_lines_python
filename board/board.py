@@ -438,7 +438,10 @@ class Board:
                         continue
                     seen_trails[tt]=1
 
+                    if self.throw_known:
+                        move.thrown=False
                     new_position,_scrubs = self.make_search_move(position, move, trail=trail)
+
                     if (len(trail) >= 2 and self.move_tuple(trail[0]) in self.debug_moves
                             and self.move_tuple(trail[1]) in self.debug_moves):
                         debug=1
@@ -516,7 +519,6 @@ class Board:
 
                         self.log(pos_str)
 
-            # value = self.position_rel_value(original_position, new_position, len(trail))
             if not worse:
                 pos_str = "%d: %s%s %s %s q:%s p:%s" % ((max_value or 0), [' ', '*'][worse]
                                           , [' ', 's'][bool(move) and move.scrubs]
@@ -799,10 +801,15 @@ class Board:
     ## return free_cell_count+mio_counts diff adjusted for count of moves between two positions
     ## the greater the value, the earlier it is taken off the queue
     # diff == b.scrub*2 +1 # returns: b.scrub*2+3 : adjusted value + metrics placeholder
-    def rel_value(self, diff, steps:int, trail:List[ddot]):
-        assert len(diff)==self._scrub_length*2 +1
+    def rel_value(self, _diff, steps:int, trail:List[ddot]):
+        assert len(_diff)==self._scrub_length*2 +1
         v=0
         last_i=None
+        diff = list(_diff)
+        if trail:
+            if trail[0].thrown==True:
+                diff[0]+=self._batch
+                assert diff[0]<=0
         for i in range(0, len(diff)):
             v+=sign(diff[i])
             if v>0:
@@ -813,6 +820,8 @@ class Board:
             comb_metric = round(sum([move.metric for move in trail]) * max([move.metric for move in trail]),4)
         else:
             comb_metric = -math.inf
+
+
         if last_i==None:
             last_i=len(diff)
             value = [ -(len(diff)+steps), -comb_metric, *diff ]
@@ -822,10 +831,16 @@ class Board:
             value = [-((last_i-1) + steps), -comb_metric, *diff]
         return value, last_i-1
 
-    def gain_value(self, diff, steps:int, trail:List[ddot]):
-        assert len(diff)==self._scrub_length*2 +1
+    def gain_value(self, _diff, steps:int, trail:List[ddot]):
+        assert len(_diff)==self._scrub_length*2 +1
         v=0
         last_i=None
+        diff=list(_diff)
+        if trail:
+            if trail[0].thrown == True:
+                diff[0] += self._batch
+                assert diff[0] <= 0
+
         for i in range(0, len(diff)):
             v+=sign(diff[i])
             if v>0:
@@ -911,7 +926,7 @@ class Board:
 
 
 
-    def make_search_move(self, position:position_c, move:move_c, trail=None, make_throw=None):
+    def make_search_move(self, position:position_c, move:move_c, trail=None):
         A=self._assessment
 
         new_position = position.copy()
@@ -923,7 +938,7 @@ class Board:
 
 
         prepicked=[]
-        if trail and len(trail)==1:
+        if move.thrown==False:
             prepicked=self.prepicked
             assert prepicked
             # prepicked = self.get_random_free_cells(position=new_position)
@@ -958,7 +973,7 @@ class Board:
                 assert False
 
         if not scrubs:
-            if trail and len(trail)==1:
+            if move.thrown==False:
                 _picked = self.place_promised(prepicked, position=new_position, consume=False)
 
                 # _picked=[]
@@ -978,6 +993,7 @@ class Board:
                 #     new_position.place(picked_add)
                 new_position.picked=_picked
                 new_position.mio_counts, _ = self.pos_evaluation(new_position)
+                move.thrown=True
         # pos_after_throw = position_c(self)
         # self.gifts(pos_before_throw, pos_after_throw)
 
@@ -1187,6 +1203,7 @@ class Board:
                                         , new_mio=exp_mio, real_mio=None, ccount=count+1
                                         , move_type=MOVE_FREE, scrubs=False
                                         , cand_keys=[ cand_key ]
+                                        , thrown=None
                                         , metric=0, total_gain=0, gain_detail=dict())
 
                             path_exists, cross = self.move_check(pos, move)
@@ -1271,6 +1288,7 @@ class Board:
                                             , new_mio=exp_mio, real_mio=None, ccount=0
                                             , move_type=MOVE_UNBLOCKING
                                             , cand_keys = tgt_keys
+                                            , thrown=None
                                             , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
                                 path_exists, cross = self.move_check(pos, move)
                                 if path_exists:
@@ -1285,6 +1303,7 @@ class Board:
                                 , new_mio=exp_mio, real_mio=None, ccount=0
                                 , move_type=MOVE_UNBLOCKING
                                 , cand_keys=tgt_keys
+                                , thrown=None
                                 , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
                     path_exists, cross = self.move_check(pos, move)
                     if path_exists:
@@ -2018,13 +2037,13 @@ class Board:
 
     def draw(self, show=False):
         self._bg.init_drawing(self._axes)
-        self._bg.draw()
+        self._bg.draw(prepicked=self.prepicked)
         # if show:
         #     self._bg.show()
 
     def draw_move(self):
         self._bg.init_drawing(self._axes)
-        self._bg.draw()
+        self._bg.draw(prepicked=self.prepicked)
         start_edges=None
         tentative_scrub_edges=None
         if not self.current_move:
@@ -2300,11 +2319,24 @@ class Board:
                 self.make_history_move(move)
             # for scrubs in history_move['board']['remove']:
             #     self.scrub_cells(scrubs)
-            self.picked=history_move['board']['new']
-            for i,pick in enumerate(self.picked):
-                if len(pick)!=3:
-                    self.picked[i]=(pick[0],pick[1],0)
-            self.place(history_move['board']['new'])
+            self.picked = history_move['board']['new']
+            for i, pick in enumerate(self.picked):
+                _pick = list(pick)
+                _pick[0]=dpos(_pick[0]['x'], _pick[0]['y'])
+                _pick = tuple(_pick)
+                self.picked[i] = _pick
+                if len(_pick) != 3:
+                    self.picked[i] = (_pick[0], _pick[1], 0)
+            self.place(self.picked)
+            self.prepicked = history_move['board']['prepicked']
+            for i, pick in enumerate(self.prepicked):
+                _pick = list(pick)
+                _pick[0] = dpos(_pick[0]['x'], _pick[0]['y'])
+                _pick = tuple(_pick)
+                self.prepicked[i]=_pick
+                if len(_pick) != 3:
+                    self.prepicked[i] = (_pick[0], _pick[1], 0)
+
             # self.prepicked = history_move['board']['prepicked']
             last_state=history_move['random_state']
             if 'random_queue' not in history_move['board']:
