@@ -106,7 +106,8 @@ class Board:
     check_mio=True
     debug_repeat = True
     debug_moves=[
-        (8,1,5,3),
+        (7,6,5,5),
+        (1,8,3,3)
         # ((1, 8), (0, 4))
     ]
     # axes: x - left, y - up, directions enumerated anti-clockwise
@@ -136,6 +137,7 @@ class Board:
         self.increases=[0]*(self._size+1)
         self.random_ahead=self._size*3
         self.random_queue=[]
+        self.throw_known=True
 
         self.reset()
         self._bg.update_graph(self)
@@ -434,7 +436,10 @@ class Board:
                         continue
                     seen_trails[tt]=1
 
-                    new_position,_scrubs = self.make_search_move(position, move)
+                    new_position,_scrubs = self.make_search_move(position, move, trail=trail)
+                    if (len(trail) >= 2 and self.move_tuple(trail[0]) in self.debug_moves
+                            and self.move_tuple(trail[1]) in self.debug_moves):
+                        debug=1
                     position_count+=1
                     if _scrubs:
                         move.scrubs=True
@@ -567,6 +572,8 @@ class Board:
                     heappush(hqueue, ((self.negate_tuple(estimate),-unique, new_move, new_position, _trail)))
 
         best_moves= self.rearrange(A.best_moves, original_position)
+        if not best_moves:
+            best_moves=A.best_moves
         # assert best_moves==A.best_moves
         return best_moves, A.position
 
@@ -581,8 +588,19 @@ class Board:
 
         if not moves:
             return []
+        if self.throw_known and len(moves)<2:
+            return []
+
         trails=[]
-        for p in itertools.permutations(range(len(moves))):
+        if self.throw_known:
+            perm = itertools.permutations(range(1,len(moves)))
+        else:
+            perm = itertools.permutations(range(0,len(moves)))
+        for _p in perm:
+            if self.throw_known:
+                p = (0, *_p)
+            else:
+                p= _p
             trail=[]
             cps=[]
             position = original_position
@@ -596,8 +614,10 @@ class Board:
                     path_exists, cross = self.check_pos_path_across(position
                                             ,moves[index].cell_from, moves[index].cell_to)
                 if not path_exists:
+
                     cps=None
                     break
+
 
                 if i==0:
                     cp=0
@@ -610,11 +630,12 @@ class Board:
                 cps.append(cp)
                 tt = tuple(sorted([self.move_tuple(move[0]) for move in trail + [(moves[index],0)]]))
                 new_position = seen_positions.get(tt)
+                trail.append((moves[index], cp))
                 if not new_position:
-                    new_position, _scrubs = self.make_search_move(position, moves[index])
+                    new_position, _scrubs = self.make_search_move(position, moves[index], trail=trail)
                     seen_positions[tt]=new_position
                 position=new_position
-                trail.append((moves[index],cp))
+
             if not cps:
                 continue
             prob = self.prob_sequence(cps)
@@ -865,7 +886,7 @@ class Board:
         return diffs
 
 
-    def make_search_move(self, position:position_c, move:move_c, make_throw=None):
+    def make_search_move(self, position:position_c, move:move_c, trail=None, make_throw=None):
         A=self._assessment
 
         new_position = position.copy()
@@ -875,6 +896,10 @@ class Board:
             mio_counts,cmio_map1 = self.pos_evaluation(new_position)
         # self.log("pos check mio: %s" % (mio_counts))
 
+
+        picked=[]
+        if trail and len(trail)==1:
+            picked = new_position.get_random_free_cells(random_storage=self, consume=False)
 
         color = new_position.cell(move.cell_from)
 
@@ -903,8 +928,24 @@ class Board:
             if mio_counts != new_position.mio_counts:
                 assert False
 
-        # self.picked = self.get_random_free_cells()
-        # self.place(self.picked)
+        if not scrubs:
+            if trail and len(trail)==1:
+                _picked=[]
+                _occupied=[]
+                for item in picked:
+                    if new_position.cell(item[0])==None:
+                        _picked.append(item)
+                    else:
+                        _occupied.append(item[1])
+
+                new_position.place(_picked)
+                if len(_occupied) > 0:
+                    picked_add = new_position.get_random_free_cells(start=len(picked)
+                                , length=len(_occupied), random_storage=self, consume=False)
+                    for i,color in enumerate(_occupied):
+                        picked_add[i]=(picked_add[i][0], color)
+                    new_position.place(picked_add)
+                new_position.mio_counts, _ = self.pos_evaluation(new_position)
         # pos_after_throw = position_c(self)
         # self.gifts(pos_before_throw, pos_after_throw)
 
@@ -2049,24 +2090,29 @@ class Board:
                     free.append(dpos(i,j))
         return free
 
-    def get_random_free_cells(self,batch=None, generate=True):
+    def get_random_free_cells(self, start=0, length=None, consume=True):
         free=self.get_free_cells()
         picked=[]
-        batch = batch if batch else self._batch
-        assert batch < self.random_ahead
-        if self.random_ahead > len(self.random_queue):
-            if not generate:
-                assert False
+        if length==None:
+            length =self._batch
+        # batch = batch if batch else self._batch
+        assert start+length <= self.random_ahead
+        if start+length > len(self.random_queue):
+            # if not consume:
+            #     assert False
             for i in range(len(self.random_queue), self.random_ahead):
                 self.random_queue.append((randint(0,100000-1),randint(0,100000-1)))
-        for i in range(0,batch):
+        for i in range(start,start+length):
             pick = self.random_queue[i][0] % len(free)
             color = self._colors[self.random_queue[i][1] % self._colsize]
             # pick = randint(0,len(free)-1)
             picked.append((free[pick], color))
             free[pick] = free[-1]
             free.pop()
-        self.random_queue=self.random_queue[batch:]
+        if consume:
+            if start!=0:
+                assert False
+            self.random_queue=self.random_queue[start+length:]
         return picked
 
     def valid(self,x,y):
@@ -2198,7 +2244,10 @@ class Board:
             self.place(history_move['board']['new'])
             self.picked=history_move['board']['new']
             last_state=history_move['random_state']
-            self.random_queue = history_move['board']['random_queue']
+            if 'random_queue' not in history_move['board']:
+                self.random_queue=[]
+            else:
+                self.random_queue = history_move['board']['random_queue']
         self.iteration=iteration
         if last_state:
             state=pickle.loads(base64.b64decode(last_state))

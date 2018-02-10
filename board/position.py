@@ -1,6 +1,7 @@
 from typing import List, Set, Dict, Tuple, Text, Optional, AnyStr
 import copy, itertools, re
 from collections import deque
+from random import randint, randrange
 
 from .utils import ddot,dpos,ddir,sign,prob_3
 
@@ -49,6 +50,9 @@ class position_c:
         self.max_colors=None
         self.component_map=None
         self.components=None
+        self._scrubs=None
+        self._scrub_length=None
+        self.picked=None
         # self.mio_map = dict()
         if board:
             self.board=board
@@ -58,6 +62,7 @@ class position_c:
             # self.mio_counts = board.evaluation()
             self.mio_counts,cmio_map = board.pos_evaluation(self)
             self._size=board._size
+            self._scrub_length=board._scrub_length
             # if self.mio_counts!=mio_counts:
             #     assert False
             self.color_list = copy.deepcopy(board._color_list)
@@ -89,7 +94,8 @@ class position_c:
     def clear_mio(self, cell:dpos):
         ckeys = self.board._assessment.cand_cell_map[cell]
         for ckey in ckeys:
-            del self.mio[ckey]
+            if ckey in self.mio:
+                del self.mio[ckey]
 
         # ckeys = self.mio_map[cell]
         # for ckey in ckeys:
@@ -130,6 +136,9 @@ class position_c:
         new_pos.board=self.board
         new_pos.mio=dict()
         new_pos.color_list=dict()
+        new_pos._scrubs = self._scrubs
+        new_pos._scrub_length = self._scrub_length
+        new_pos.picked=self.picked
 
         new_pos.array = [
             [None for i in range(0, self.board._size)]
@@ -215,6 +224,121 @@ class position_c:
         if (cell.x>=0 and cell.y>=0 and cell.x<self._size and cell.y<self._size):
             return True
         return False
+
+    def place(self,picked):
+        self.picked=picked
+        for item in picked:
+            (pos,color)=item
+            if self._scrubs:
+                self.scrub_cells()
+            self.fill_cell(pos,color)
+            self._scrubs = self.check_scrubs(pos)
+        # self.update_graph()
+        # self.component_map = self._bg.get_components()
+        # self.update_buffer()
+
+    def get_free_cells(self):
+        return list(self.free_cells)
+
+    def get_random_free_cells(self, random_storage=None, start=0, length=None, consume=True):
+        rs = random_storage or self
+        free=self.get_free_cells()
+        picked=[]
+        if length==None:
+            length =rs._batch
+        # batch = batch if batch else self._batch
+        assert start+length <= rs.random_ahead
+        if start+length > len(rs.random_queue):
+            # if not consume:
+            #     assert False
+            for i in range(len(rs.random_queue), rs.random_ahead):
+                rs.random_queue.append((randint(0,100000-1),randint(0,100000-1)))
+        for i in range(start,start+length):
+            pick = rs.random_queue[i][0] % len(free)
+            color = rs._colors[rs.random_queue[i][1] % rs._colsize]
+            # pick = randint(0,len(free)-1)
+            picked.append((free[pick], color))
+            free[pick] = free[-1]
+            free.pop()
+        if consume:
+            if start!=0:
+                assert False
+            rs.random_queue=rs.random_queue[start+length:]
+        return picked
+
+    def scrub_cells(self,scrubs=None):
+        self._scrubs = scrubs if scrubs else self._scrubs
+        scrubbed=dict()
+        for scrub in self._scrubs:
+            for item in scrub:
+                if not item in scrubbed:
+                    self.free_cell(item, self.cell(item))
+                    scrubbed[item]=1
+        self._scrubs=None
+        # self.update_buffer()
+
+    def check_scrubs(self, pos: dpos):
+        # scrub_cells=[]
+        self._scrubs = self.get_scrubs_XY(pos)
+
+        # for i in range(0,self._size):
+        #     for j in range(0, self._size):
+        #         self._scrubs += self.get_scrubs_XY(i,j)
+        return self._scrubs
+
+
+    def get_scrubs_XY(self,pos:dpos):
+        x,y=tuple(pos)
+        scrubs = []
+        color = self.array[x][y]
+        if color == None:
+            return scrubs
+        for _dir in self._dirs[:4]:
+            (dx, dy) = _dir
+            dir=ddir(_dir[0],_dir[1])
+
+            fw = self.get_segment_items(pos, dir)
+            bw = self.get_segment_items(pos, ddir(-dir.dx,-dir.dy))
+
+            fw_i=next((i for i, x in enumerate(fw) if x[1]!=color), len(fw))
+            bw_i=next((i for i, x in enumerate(bw) if x[1]!=color), len(bw))
+
+            if fw_i+bw_i-1 < self._scrub_length:
+                continue
+
+            scrub = [ v[0] for v in itertools.chain(reversed(bw[1:bw_i]), fw[0:fw_i])]
+            scrubs.append(scrub)
+            # (cx,cy)=(x,y)
+            # while True:
+            #     cx+=sx
+            #     cy+=sy
+            #     if not self.valid(cx,cy):
+            #         break
+            #     if self._array[cx][cy]==color:
+            #         scrub.append(dpos(cx,cy))
+            #     else:
+            #         break
+            # if len(scrub)>=self._scrub_length:
+            #     # import pdb;pdb.set_trace()
+            #     scrubs.append(scrub)
+        return scrubs
+
+    def get_segment_items(self,start_cell:dpos,dir:ddir,length=None) -> List[Tuple[dpos,str]]:
+        items=[]
+        cell = start_cell.copy()
+        # cx:int=cell.x
+        # cy:int=cell.y
+        i=0
+        while self.valid_cell(cell):
+            if length!=None and i >=length:
+                break
+            items.append([cell.copy(),self.cell(cell)])
+            cell.x+=dir.dx
+            cell.y+=dir.dy
+            i+=1
+
+        return items
+
 
     def check_overall_disc(self):
         comps = self.components
