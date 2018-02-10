@@ -113,7 +113,7 @@ class Board:
     ]
     # axes: x - left, y - up, directions enumerated anti-clockwise
 
-    def __init__(self, size=9, batch=5, colsize=None, scrub_length=5, axes=None, logfile=None, drawing_callbacks={}):
+    def __init__(self, size=9, batch=3, colsize=None, scrub_length=5, axes=None, logfile=None, drawing_callbacks={}):
         if colsize==None:
             colsize=len(self._colors)
         self._size=size
@@ -141,6 +141,7 @@ class Board:
         self.throw_known=True
         self.picked=None
         self.prepicked=None
+        self.initial_batch=5
         self.cost_value_len = self._scrub_length * 2 + 2
 
         self.reset()
@@ -1970,7 +1971,10 @@ class Board:
     def next_move(self):
         history_item = dict(board=dict(move=list(), remove=list(), new=list()), random_state=None)
         scrubbed=False
-        _picked = self.get_random_free_cells()
+        if self.iteration==0:
+            _picked = self.get_random_free_cells(length=self.initial_batch)
+        else:
+            _picked = self.get_random_free_cells()
         if self.current_move:
             history_item['board']['move'].append((self.current_move.cell_from
                                         , self.current_move.cell_to
