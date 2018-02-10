@@ -134,6 +134,8 @@ class Board:
         self.drawing_callbacks = drawing_callbacks
         self._logfile=logfile
         self.increases=[0]*(self._size+1)
+        self.random_ahead=self._size*3
+        self.random_queue=[]
 
         self.reset()
         self._bg.update_graph(self)
@@ -886,7 +888,7 @@ class Board:
             if mio_counts!=new_position.mio_counts:
                 assert False
 
-        scrubs= self.update_when_filling(new_position, move.cell_to, color )
+        scrubs = self.update_when_filling(new_position, move.cell_to, color )
         new_position.fill_cell(move.cell_to, color)
         if self.check_mio:
             mio_counts,cmio_map3 = self.pos_evaluation(new_position)
@@ -1852,6 +1854,7 @@ class Board:
             self.gifts(pos_before_throw, pos_after_throw)
 
         history_item['board']['new']=self.picked
+        history_item['board']['random_queue']=self.random_queue
         history_item['random_state'] = base64.b64encode(pickle.dumps(random.getstate())).decode('ascii')
 
         if len(self._history) > self.iteration:
@@ -2046,17 +2049,24 @@ class Board:
                     free.append(dpos(i,j))
         return free
 
-    def get_random_free_cells(self,batch=None):
+    def get_random_free_cells(self,batch=None, generate=True):
         free=self.get_free_cells()
         picked=[]
         batch = batch if batch else self._batch
+        assert batch < self.random_ahead
+        if self.random_ahead > len(self.random_queue):
+            if not generate:
+                assert False
+            for i in range(len(self.random_queue), self.random_ahead):
+                self.random_queue.append((randint(0,100000-1),randint(0,100000-1)))
         for i in range(0,batch):
-            if len(free)<1:
-                break
-            pick = randint(0,len(free)-1)
-            picked.append((free[pick], self._colors[randrange(self._colsize)]))
-            free[pick]=free[-1]
+            pick = self.random_queue[i][0] % len(free)
+            color = self._colors[self.random_queue[i][1] % self._colsize]
+            # pick = randint(0,len(free)-1)
+            picked.append((free[pick], color))
+            free[pick] = free[-1]
             free.pop()
+        self.random_queue=self.random_queue[batch:]
         return picked
 
     def valid(self,x,y):
@@ -2188,6 +2198,7 @@ class Board:
             self.place(history_move['board']['new'])
             self.picked=history_move['board']['new']
             last_state=history_move['random_state']
+            self.random_queue = history_move['board']['random_queue']
         self.iteration=iteration
         if last_state:
             state=pickle.loads(base64.b64decode(last_state))
