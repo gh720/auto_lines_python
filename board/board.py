@@ -108,7 +108,8 @@ class Board:
     debug_moves=[
         # (1,3,4,1),
         # (1,3,5,1),
-        (7,6,5,6),
+        (7, 4 , 5, 8),
+        (7, 4 , 5, 7),
         # (3,2,8,4),
         # ((1, 8), (0, 4))
     ]
@@ -143,7 +144,7 @@ class Board:
         self.picked=None
         self.prepicked=None
         self.initial_batch=5
-        self.cost_value_len = self._scrub_length * 2 + 2
+        self.cost_value_len = self._scrub_length * 2 + 4
 
         self.reset()
         self._bg.update_graph(self)
@@ -423,7 +424,7 @@ class Board:
 
         best_value=None
 
-        zero_value=[0]*(len(original_position.mio_counts)+2) # 1(in the middle) for metric
+        zero_value=[0]*(len(original_position.mio_counts)+4) # 1(in the middle) for metric
         assert len(zero_value)==self.cost_value_len
 
         scrubs=False
@@ -587,9 +588,9 @@ class Board:
                     if not len(value) == self.cost_value_len:
                         assert False
                     _diff=list(self.get_diff_from_value(value))
-                    _diff[new_move.new_mio+1] += 1
+                    _diff[new_move.new_mio+2] += 1
                     diff=tuple(_diff)
-                    estimate,mio = self.rel_value(diff, len(_trail), _trail)
+                    estimate,mio = self.rel_value(diff, len(trail), trail)
                     unique += 1
                     if self.debug_hqueue >= LOGLEVEL_4:
                         pos_str = ">> %s %s q:%s p:%s" % (estimate, ",".join(
@@ -835,6 +836,42 @@ class Board:
     ## the greater the value, the earlier it is taken off the queue
     # diff == b.scrub*2 +1 # returns: b.scrub*2+3 : adjusted value + metrics placeholder
     def rel_value(self, diff, steps:int, trail:List[ddot]):
+        if not len(diff)==self.cost_value_len-3:
+            assert False
+
+        disc_metric=None
+        if trail:
+            # comb_metric = round(sum([move.metric for move in trail]) * max([move.metric for move in trail]),4)
+            disc_metric = trail[-1].metric
+        else:
+            disc_metric = -math.inf
+            # comb_metric = -math.inf
+
+        last_i = len(diff)
+        for i in range(1,len(diff)):
+            if diff[i] > 0:
+                last_i=i
+                break
+
+        proj_mio = last_i-1
+        proj_free_cells=diff[0]
+        for i in range(0,3):
+            if i< len(trail):
+                if trail[i].scrubs==True:
+                    break
+            else:
+                proj_mio-=1
+                if proj_mio>0:
+                    proj_free_cells-=self._batch
+                else:
+                    proj_free_cells+=self._scrub_length
+                    break
+
+        value = [ proj_free_cells, proj_mio, *diff[:self._scrub_length-1], -disc_metric, *diff[self._scrub_length-1:]]
+
+        return value, 0
+
+    def rel_value_(self, diff, steps:int, trail:List[ddot]):
         if not len(diff)==self.cost_value_len-1:
             assert False
 
@@ -853,10 +890,13 @@ class Board:
     def get_diff_from_value(self,value):
         if not len(value)==self.cost_value_len:
             assert False
-        return tuple([ *value[:self._scrub_length-1], *value[self._scrub_length:]])
+        return tuple([ *value[2:self._scrub_length+1], *value[self._scrub_length+2:]])
 
 
     def gain_value(self, diff, steps:int, trail:List[ddot]):
+        return self.rel_value(diff,steps,trail)
+
+    def gain_value_(self, diff, steps:int, trail:List[ddot]):
         if not len(diff)==self.cost_value_len-1:
             assert False
         v=0
