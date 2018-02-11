@@ -100,15 +100,16 @@ class Board:
 
     _history=list()
 
-    # debug_hqueue=LOGLEVEL_DEBUG
     debug_hqueue=LOGLEVEL_INFO
+    # debug_hqueue=LOGLEVEL_DEBUG
     debug_mio_changes=0
     check_mio=False
     debug_repeat = True
     debug_moves=[
-        (1,6,1,5),
-        (0,4,1,5),
-        (0,1,1,4)
+        # (1,3,4,1),
+        # (1,3,5,1),
+        (7,6,5,6),
+        # (3,2,8,4),
         # ((1, 8), (0, 4))
     ]
     # axes: x - left, y - up, directions enumerated anti-clockwise
@@ -129,7 +130,7 @@ class Board:
         # self.prepare_view()
         self.max_color_candidates=10
         self.max_free_moves=10
-        self.max_obst_moves=5
+        self.max_obstacle_moves=10
         self.max_no_path_moves=100
         # self.components=list()
         self.component_map=dict()
@@ -396,6 +397,12 @@ class Board:
             return None
         return tuple([-v for v in t])
 
+    def picked_str(self,picked,prefix,suffix):
+        str=''
+        if picked:
+            str = prefix+','.join(["%s%d.%d" % (item[1][0], item[0].x, item[0].y) for item in picked])+suffix
+        return str
+
     def search_ahead(self):
         A=self._assessment
         original_position = self.get_original_position()
@@ -436,28 +443,31 @@ class Board:
                 if move.real_mio==None: # rough value estimate, assess and put back on queue
                     # if max_value !=None and value[0] < max_value:
                     #     continue
-                    tt = tuple(sorted([ self.move_tuple(move) for move in trail ]))
-                    if tt in seen_trails:
-                        skipped+=1
-                        continue
-                    seen_trails[tt]=1
+                    # tt = tuple(sorted([ self.move_tuple(move) for move in trail ]))
+                    # if tt in seen_trails:
+                    #     skipped+=1
+                    #     continue
+                    # seen_trails[tt]=1
 
                     if self.throw_known:
-                        move.thrown=False
+                        if len(trail)==1:
+                            move.thrown=False
+                    # if all([ self.move_tuple(trail[i] )== self.debug_moves[i] for i in range(len(trail))]):
+                    #     if len(trail)==2:
+                    #         debug=1
                     new_position,_scrubs = self.make_search_move(position, move, trail=trail)
 
-                    if (len(trail) >= 2 and self.move_tuple(trail[0]) in self.debug_moves
-                            and self.move_tuple(trail[1]) in self.debug_moves):
-                        debug=1
                     position_count+=1
                     if _scrubs:
                         move.scrubs=True
                         scrubs=True
                     if self.debug_hqueue>=LOGLEVEL_DEBUG:
                         pos_str = "<%d %s %s q:%s" % ((max_value or 0), value, ",".join(
-                            ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
+                            ["%s%d:%d,%d>%d,%d%s" % (move.color[0], move.move_type
                                                  , move.cell_from.x, move.cell_from.y
-                                                 , move.cell_to.x, move.cell_to.y)
+                                                 , move.cell_to.x, move.cell_to.y
+                                                     , self.picked_str(move.picked, prefix='[', suffix=']')
+                                                     )
                              for move in trail]
                         ), len(hqueue))
                         self.log(pos_str)
@@ -468,9 +478,11 @@ class Board:
                         unique += 1
                         if self.debug_hqueue >= LOGLEVEL_DEBUG:
                             pos_str = "#%d %s %s q:%s p:%s" % ((max_value or 0), value, ",".join(
-                                ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
+                                ["%s%d:%d,%d>%d,%d%s" % (move.color[0], move.move_type
                                                      , move.cell_from.x, move.cell_from.y
-                                                     , move.cell_to.x, move.cell_to.y)
+                                                     , move.cell_to.x, move.cell_to.y
+                                                       , self.picked_str(move.picked, prefix='[', suffix=']')
+                                                       )
                                  for move in trail]
                             ), len(hqueue), position_count)
                             self.log(pos_str)
@@ -486,9 +498,11 @@ class Board:
                         unique+=1
                         if self.debug_hqueue >= LOGLEVEL_DEBUG:
                             pos_str = ">%d %s %s q:%s p:%s" % ((max_value or 0), value, ",".join(
-                                ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
+                                ["%s%d:%d,%d>%d,%d%s" % (move.color[0], move.move_type
                                                      , move.cell_from.x, move.cell_from.y
-                                                     , move.cell_to.x, move.cell_to.y)
+                                                     , move.cell_to.x, move.cell_to.y
+                                                       , self.picked_str(move.picked, prefix='[', suffix=']')
+                                                       )
                                  for move in trail]
                             ), len(hqueue), position_count)
                             self.log(pos_str)
@@ -521,21 +535,25 @@ class Board:
                         pos_str = "%d: %s%s %s %s q:%s p:%s" % ((max_value or 0), [' ', '*'][worse]
                                                                 , [' ', 's'][bool(move) and move.scrubs]
                                                                 , val2, ",".join(
-                            ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
+                            ["%s%d:%d,%d>%d,%d%s" % (move.color[0], move.move_type
                                                    , move.cell_from.x, move.cell_from.y
-                                                   , move.cell_to.x, move.cell_to.y)
+                                                   , move.cell_to.x, move.cell_to.y
+                                                     , self.picked_str(move.picked, prefix='[', suffix=']')
+                                                     )
                              for move in trail]
                         ), len(hqueue), position_count)
 
                         self.log(pos_str)
 
             if not worse:
-                pos_str = "%d: %s%s %s %s q:%s p:%s" % ((max_value or 0), [' ', '*'][worse]
+                pos_str = "<< %d: %s%s %s %s q:%s p:%s" % ((max_value or 0), [' ', '*'][worse]
                                           , [' ', 's'][bool(move) and move.scrubs]
                                           ,  value, ",".join(
-                    ["%s%d:%d,%d>%d,%d" % (move.color[0], move.move_type
+                    ["%s%d:%d,%d>%d,%d%s" % (move.color[0], move.move_type
                                          , move.cell_from.x, move.cell_from.y
-                                         , move.cell_to.x, move.cell_to.y)
+                                         , move.cell_to.x, move.cell_to.y
+                                             , self.picked_str(move.picked, prefix='[', suffix=']')
+                                             )
                      for move in trail]
                 ), len(hqueue), position_count)
 
@@ -575,9 +593,11 @@ class Board:
                     unique += 1
                     if self.debug_hqueue >= LOGLEVEL_4:
                         pos_str = ">> %s %s q:%s p:%s" % (estimate, ",".join(
-                            ["%s%s:%d,%d>%d,%d" % (move.color[0],move.move_type
+                            ["%s%s:%d,%d>%d,%d%s" % (move.color[0],move.move_type
                                                  , move.cell_from.x, move.cell_from.y
-                                                 , move.cell_to.x, move.cell_to.y)
+                                                 , move.cell_to.x, move.cell_to.y
+                                                     , self.picked_str(move.picked, prefix='[', suffix=']')
+                                                     )
                              for move in _trail]
                         ), len(hqueue), position_count)
                         self.log(pos_str)
@@ -818,12 +838,15 @@ class Board:
         if not len(diff)==self.cost_value_len-1:
             assert False
 
+        disc_metric=None
         if trail:
-            comb_metric = round(sum([move.metric for move in trail]) * max([move.metric for move in trail]),4)
+            # comb_metric = round(sum([move.metric for move in trail]) * max([move.metric for move in trail]),4)
+            disc_metric = trail[-1].metric
         else:
-            comb_metric = -math.inf
+            disc_metric = -math.inf
+            # comb_metric = -math.inf
 
-        value = [ *diff[:self._scrub_length-1], -comb_metric, *diff[self._scrub_length-1:]]
+        value = [ *diff[:self._scrub_length-1], -disc_metric, *diff[self._scrub_length-1:]]
 
         return value, 0
 
@@ -837,13 +860,16 @@ class Board:
         if not len(diff)==self.cost_value_len-1:
             assert False
         v=0
-
+        disc_metric=None
         if trail:
-            comb_metric = round(sum([move.metric for move in trail]) * max([move.metric for move in trail]),4)
+            # comb_metric = round(sum([move.metric for move in trail]) * max([move.metric for move in trail]),4)
+            disc_metric = trail[-1].metric
         else:
-            comb_metric = math.inf
+            disc_metric = -math.inf
+            # comb_metric = -math.inf
 
-        value = [ *diff[:self._scrub_length-1], -comb_metric, *diff[self._scrub_length-1:]]
+
+        value = [ *diff[:self._scrub_length-1], -disc_metric, *diff[self._scrub_length-1:]]
 
         return value, 0
 
@@ -1023,6 +1049,7 @@ class Board:
         if not scrubs:
             if move.thrown==False:
                 _picked = self.place_promised(prepicked, position=new_position, consume=False)
+                move.picked=_picked
 
                 # _picked=[]
                 # _occupied=[]
@@ -1042,6 +1069,8 @@ class Board:
                 new_position.picked=_picked
                 new_position.mio_counts, _ = self.pos_evaluation(new_position)
                 move.thrown=True
+            else:
+                new_position.free_cell_count-=self._batch
         # pos_after_throw = position_c(self)
         # self.gifts(pos_before_throw, pos_after_throw)
 
@@ -1182,6 +1211,23 @@ class Board:
 
         no_path_loop()
 
+    def adjusted_mio(self,pos,ckey):
+        A=self._assessment
+        _value = pos.mio[ckey]
+        value={ k:v for k,v in _value.items()}
+        cand = A.candidates[ckey]
+        cells =cand.cells
+        if self.prepicked:
+            for item in self.prepicked:
+                pcell,pcolor,rnd=item
+                if pcell in cand.cells:
+                    for color, item in value.items():
+                        mio, count, ccells = item
+                        if color==pcolor:
+                            value[color]=(mio-1,count+1,ccells)
+                        elif color!=None:
+                            value[color]=(mio+1,count,ccells)
+        return value
 
     def find_new_moves(self, pos: position_c, trail:List[ddot]) -> List[ddot]:
 
@@ -1203,19 +1249,26 @@ class Board:
             tgt_keys=None
             if trail:
                 tgt_keys=trail[-1].cand_keys
-
-            if tgt_keys:
-                for tgt_key in tgt_keys:
-                    value=pos.mio[tgt_key]
-                    for color, item in value.items():
-                        mio,count,ccells=item
-                        mio_list.append((tgt_key, color, mio, count))
             else:
-                for cand_key, value in pos.mio.items():
-                    for color, item in value.items():
-                        mio,count,ccells=item
-                        mio_list.append((cand_key, color, mio, count))
+                tgt_keys = pos.mio.keys()
+
+            for tgt_key in tgt_keys:
+                value = self.adjusted_mio(pos, tgt_key)
+                # value=pos.mio[tgt_key]
+
+                for color, item in value.items():
+                    mio,count,ccells=item
+                    mio_list.append((tgt_key, color, mio, count))
+            # else:
+            #     for cand_key, value in pos.mio.items():
+            #         for color, item in value.items():
+            #             mio,count,ccells=item
+            #             mio_list.append((cand_key, color, mio, count))
             mio_slist = sorted(mio_list, key=lambda v: v[2])
+
+            prepicked_cells=dict()
+            if self.prepicked:
+                prepicked_cells = dict([(item[0],1) for item in self.prepicked])
 
             # first_queue=[] # improvement expected
             # second_queue=[] # shuffling around, can be beneficial too
@@ -1231,6 +1284,8 @@ class Board:
                         continue
                     # if ccolor==None or True: # free
                     else:
+                        if cell in prepicked_cells: # roughly, if we move the ball over a prepicked cell we negate its effects on this candidate
+                            mio,count,_= pos.mio[cand_key][color]
                         # move_map.setdefault(cell,dict())
                         clist= pos.color_list[color]
                         exp_mio=None
@@ -1252,6 +1307,7 @@ class Board:
                                         , move_type=MOVE_FREE, scrubs=False
                                         , cand_keys=[ cand_key ]
                                         , thrown=None
+                                        , picked=None
                                         , metric=0, total_gain=0, gain_detail=dict())
 
                             path_exists, cross = self.move_check(pos, move)
@@ -1261,7 +1317,8 @@ class Board:
                             elif cross:
                                 move.move_type=MOVE_BLOCKED
                                 for obcell in cross:
-                                    obstacles.setdefault(dpos(obcell[0],obcell[1]), list()).append(move)
+                                    obstacles.setdefault(dpos(obcell[0],obcell[1])
+                                        , SortedListWithKey(key=lambda move:move.new_mio)).add(move)
                     # elif ccolor!=color:
                     #     move = ddot(cell_from=self.NOT_A_CELL, cell_to=cell, color=color
                     #                 , new_mio=mio - 2, real_mio=False, move_type=MOVE_OCCUPIED, scrubs=False
@@ -1288,14 +1345,25 @@ class Board:
 
             move_keys = dict()
 
-            for obcell,moves in obstacles.items(): # every obstacle
+            obcells = sorted(obstacles.keys(), key=lambda obcell: obstacles[obcell][0].new_mio)
+
+            # for obcell,moves in obstacles.items(): # every obstacle
+            for ob_i, obcell in enumerate(obcells):
+                moves = obstacles[obcell]
                 if trail and obcell == trail[-1].cell_to:
                     continue
 
-                move_mio=max([ move.new_mio for move in moves ])-1
+                move_mio=min([ move.new_mio for move in moves ])+1
+                _move_mio = moves[0].new_mio+1
+                if not move_mio==_move_mio:
+                    assert False
+
                 tgt_set=set()
                 tgt_keys=[]
-                for move in moves:
+                min_mio=None
+                move_it_key = moves.irange_key(max_key=max(1,moves[0].new_mio))
+
+                for move in move_it_key:
                     for ckey in move.cand_keys:
                         if not ckey in tgt_set:
                             tgt_set.add(ckey)
@@ -1315,6 +1383,8 @@ class Board:
                     # assert len(A_cands)==len(cands)
                     for ckey,cand in cands.items(): # for cell of the same color : every candidate
                         cmio=self.cand_mio(pos,cand)
+                        cmio = self.adjusted_mio(pos,ckey)
+
                         # cmio = pos.mio[self.cand_key(cand)]
                         _mio,count,cc_cells=cmio[obcolor]
                         cells=cand.cells
@@ -1323,40 +1393,47 @@ class Board:
                                 continue
 
                             exp_mio = _mio-1
-                            if cell in cc_cells:
+                            if obcell in cc_cells:
                                 exp_mio = _mio
                             if pos.cell(cell)==None:
                                 move_tuple = (obcell, cell, tuple(tgt_keys))
+                                # contra :
                                 if move_tuple in move_map:
                                     continue
                                 move_map[move_tuple]=1
 
-                                mio=max(_mio-1,move_mio)
+                                exp_2mio = (move_mio,exp_mio)
+                                if move_mio  > exp_mio:
+                                    exp_2mio = (exp_mio, move_mio)
+                                exp_mio=min(exp_mio,move_mio)
                                 move = ddot(cell_from=obcell, cell_to=cell, color=obcolor
                                             , new_mio=exp_mio, real_mio=None, ccount=0
                                             , move_type=MOVE_UNBLOCKING
                                             , cand_keys = tgt_keys
                                             , thrown=None
+                                            , picked=None
                                             , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
                                 path_exists, cross = self.move_check(pos, move)
                                 if path_exists:
                                     move.metric = 0 # pos.metrics['lc'][tuple(move.cell_to)]
-                                    _moves.append((exp_mio, len(_moves), move))
+                                    _moves.append((exp_2mio, len(_moves), move))
                                     dispatched = True
                 if dispatched:
                     continue
                 for fcell in pos.free_cells:
-                    exp_mio=4
+                    mio=4
+                    exp_2mio = (move_mio, mio)
                     move = ddot(cell_from=obcell, cell_to=fcell, color=obcolor
-                                , new_mio=exp_mio, real_mio=None, ccount=0
+                                , new_mio=move_mio, real_mio=None, ccount=0
                                 , move_type=MOVE_UNBLOCKING
                                 , cand_keys=tgt_keys
                                 , thrown=None
+                                , picked=None
                                 , scrubs=False, metric=0, total_gain=0, gain_detail=dict())
                     path_exists, cross = self.move_check(pos, move)
                     if path_exists:
                         move.metric = 0 # pos.metrics['lc'][tuple(move.cell_to)]
-                        _moves.append((exp_mio, len(_moves), move))
+                        _moves.append((exp_2mio, len(_moves), move))
                         dispatched = True
 
             move_map = dict()
@@ -1369,7 +1446,7 @@ class Board:
                 if move_map.setdefault(move.cell_from, dict()).setdefault(move.cell_to, i) == i:
                     new_moves.append(move)
                     counter += 1
-                    if counter >= self.max_obst_moves:
+                    if counter >= self.max_obstacle_moves:
                         break
             return
         obst_move_loop()
@@ -1431,7 +1508,7 @@ class Board:
                                 if self.add_move_candidate(move):
                                     added = True
                                     counter+=1
-                                    if counter>self.max_obst_moves:
+                                    if counter>self.max_obstacle_moves:
                                         return
             return
         obst_loop()
