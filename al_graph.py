@@ -72,7 +72,7 @@ def main():
     def start():
         nonlocal board,nargs,auto_play_moves
         # G=make_graph()
-        board= Board(size=9,batch=5,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile
+        board= Board(size=9,batch=3,colsize=None,scrub_length=5,axes=main_ax, logfile=logfile
                      , drawing_callbacks= { stage: (drawing_callback if stage in stages_to_show else None)
                                             for stage in stages }
                      )
@@ -96,6 +96,9 @@ def main():
                 auto_play_moves-=1
                 if auto_play_moves <=0:
                     break
+                save_history()
+            else:
+                save_history()
             picked = next_move()
 
 

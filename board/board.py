@@ -605,7 +605,8 @@ class Board:
 
                     heappush(hqueue, ((self.negate_tuple(estimate),-unique, new_move, new_position, _trail)))
 
-        best_moves= self.rearrange(A.best_moves, original_position)
+        # best_moves= self.rearrange(A.best_moves, original_position)
+        best_moves = A.best_moves
         if not best_moves:
             best_moves=A.best_moves
         # assert best_moves==A.best_moves
